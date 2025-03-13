@@ -1,25 +1,28 @@
-from sqlmodel import SQLModel, Field
+from datetime import datetime
+from typing import Optional
+
+from nanoid import generate
+from sqlmodel import Field, SQLModel
 
 
-class HeroBase(SQLModel):
-    name: str = Field(index=True)
-    age: int | None = Field(default=None, index=True)
+class Episode(SQLModel, table=True):
+    uuid: str = Field(default_factory=generate, primary_key=True)
+    preprocessed: bool = Field(default=False)
+    postprocessed: bool = Field(default=False)
+    editor_state: str = Field(default="")
+    title: str = Field(default="")
+    created_at: datetime = Field(default_factory=datetime.now)
 
 
-class Hero(HeroBase, table=True):
-    id: int | None = Field(default=None, primary_key=True)
-    secret_name: str
+class EpisodeCreate(SQLModel):
+    title: str
+    editor_state: Optional[str] = ""
+    preprocessed: Optional[bool] = False
+    postprocessed: Optional[bool] = False
 
 
-class HeroPublic(HeroBase):
-    id: int
-
-
-class HeroCreate(HeroBase):
-    secret_name: str
-
-
-class HeroUpdate(HeroBase):
-    name: str | None = None
-    age: int | None = None
-    secret_name: str | None = None
+class EpisodeUpdate(SQLModel):
+    title: Optional[str] = None
+    editor_state: Optional[str] = None
+    preprocessed: Optional[bool] = None
+    postprocessed: Optional[bool] = None

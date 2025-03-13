@@ -1,11 +1,15 @@
 from contextlib import asynccontextmanager
-from typing import Annotated
+from typing import Annotated, List
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, UploadFile, status
 from sqlmodel import Session, select
 
 from app.db import create_db_and_tables, get_session
-from app.models import Hero, HeroCreate, HeroPublic, HeroUpdate
+from app.models import (
+    Episode,
+    EpisodeCreate,
+    EpisodeUpdate,
+)
 
 SessionDep = Annotated[Session, Depends(get_session)]
 
@@ -19,51 +23,70 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
-@app.post("/heroes/", response_model=HeroPublic)
-def create_hero(hero: HeroCreate, session: SessionDep):
-    db_hero = Hero.model_validate(hero)
-    session.add(db_hero)
+# Episode CRUD endpoints
+@app.post(
+    "/episodes/", response_model=Episode, status_code=status.HTTP_201_CREATED
+)
+def create_episode(
+    episode: EpisodeCreate,
+    session: SessionDep,
+    file: UploadFile,
+):
+    print(file.filename)
+    db_episode = Episode.model_validate(episode)
+    session.add(db_episode)
     session.commit()
-    session.refresh(db_hero)
-    return db_hero
+    session.refresh(db_episode)
+    return db_episode
 
 
-@app.get("/heroes/", response_model=list[HeroPublic])
-def read_heroes(
+@app.get("/episodes/", response_model=List[Episode])
+def read_episodes(
     session: SessionDep,
     offset: int = 0,
     limit: Annotated[int, Query(le=100)] = 100,
 ):
-    heroes = session.exec(select(Hero).offset(offset).limit(limit)).all()
-    return heroes
+    episodes = session.exec(select(Episode).offset(offset).limit(limit)).all()
+    return episodes
 
 
-@app.get("/heroes/{hero_id}", response_model=HeroPublic)
-def read_hero(hero_id: int, session: SessionDep):
-    hero = session.get(Hero, hero_id)
-    if not hero:
-        raise HTTPException(status_code=404, detail="Hero not found")
-    return hero
+@app.get("/episodes/{episode_uuid}", response_model=Episode)
+def read_episode(episode_uuid: str, session: SessionDep):
+    episode = session.get(Episode, episode_uuid)
+    if not episode:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Episode not found",
+        )
+    return episode
 
 
-@app.patch("/heroes/{hero_id}", response_model=HeroPublic)
-def update_hero(hero_id: int, hero: HeroUpdate, session: SessionDep):
-    hero_db = session.get(Hero, hero_id)
-    if not hero_db:
-        raise HTTPException(status_code=404, detail="Hero not found")
-    hero_data = hero.model_dump(exclude_unset=True)
-    hero_db.sqlmodel_update(hero_data)
-    session.add(hero_db)
+@app.patch("/episodes/{episode_uuid}", response_model=Episode)
+def update_episode(
+    episode_uuid: str, episode: EpisodeUpdate, session: SessionDep
+):
+    db_episode = session.get(Episode, episode_uuid)
+    if not db_episode:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Episode not found",
+        )
+    episode_data = episode.model_dump(exclude_unset=True)
+    db_episode.sqlmodel_update(episode_data)
+    session.add(db_episode)
     session.commit()
-    session.refresh(hero_db)
-    return hero_db
+    session.refresh(db_episode)
+    return db_episode
 
 
-@app.delete("/heroes/{hero_id}")
-def delete_hero(hero_id: int, session: SessionDep):
-    hero = session.get(Hero, hero_id)
-    if not hero:
-        raise HTTPException(status_code=404, detail="Hero not found")
-    session.delete(hero)
+@app.delete("/episodes/{episode_uuid}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_episode(episode_uuid: str, session: SessionDep):
+    episode = session.get(Episode, episode_uuid)
+    if not episode:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Episode not found",
+        )
+    session.delete(episode)
     session.commit()
-    return {"ok": True}
+    return None
