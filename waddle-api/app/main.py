@@ -28,11 +28,9 @@ app = FastAPI(lifespan=lifespan)
     "/episodes/", response_model=Episode, status_code=status.HTTP_201_CREATED
 )
 def create_episode(
-    episode: EpisodeCreate,
-    session: SessionDep,
-    file: UploadFile,
+    episode: EpisodeCreate, session: SessionDep, files: List[UploadFile]
 ):
-    print(file.filename)
+    print(files)
     db_episode = Episode.model_validate(episode)
     session.add(db_episode)
     session.commit()
