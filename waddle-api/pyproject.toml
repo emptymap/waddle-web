@@ -8,7 +8,9 @@ license = { text = "MIT"}
 authors = [
   {name = "emptymap", email = "youremail@example.aaa"}
 ]
-dependencies = []
+dependencies = [
+    "fastapi[standard]>=0.115.11",
+]
 
 [dependency-groups]
 dev = [
