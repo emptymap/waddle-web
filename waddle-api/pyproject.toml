@@ -22,9 +22,6 @@ dev = [
     "invoke>=2.2.0",
 ]
 
-[tool.uv]
-package = true
-
 [tool.ruff]
 line-length = 79
 exclude = [".venv", "venv", "migrations", "__pycache__", "build", "dist"]
@@ -40,5 +37,5 @@ indent-style = "space"
 line-ending = "auto"
 
 [tool.coverage.run]
-source = ["src"]
+source = ["app"]
 omit = ["*/tests/*", "*_test.py"]
