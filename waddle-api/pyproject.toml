@@ -12,6 +12,7 @@ dependencies = [
     "fastapi[standard]>=0.115.11",
     "sqlmodel>=0.0.16",
     "alembic>=1.13.1",
+    "nanoid>=2.0.0",
 ]
 
 [dependency-groups]
