@@ -1,0 +1,42 @@
+[project]
+name = "waddle-api"
+version = "0.1.0"
+description = "A short description of the project."
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "MIT"}
+authors = [
+  {name = "emptymap", email = "youremail@example.aaa"}
+]
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.1.0",
+    "pytest-cov>=6.0.0",
+    "pytest>=8.3.4",
+    "ruff>=0.9.6",
+    "pyright>=1.1.394",
+    "invoke>=2.2.0",
+]
+
+[tool.uv]
+package = true
+
+[tool.ruff]
+line-length = 79
+exclude = [".venv", "venv", "migrations", "__pycache__", "build", "dist"]
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F"]
+fixable = ["ALL"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["*/tests/*", "*_test.py"]
