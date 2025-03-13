@@ -1,0 +1,2 @@
+def bbb():
+    return "bbb"
