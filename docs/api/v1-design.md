@@ -185,7 +185,7 @@ This document outlines the API specification for a podcast editing web applicati
 
 ```python
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Literal
 from nanoid import generate
 from sqlmodel import Field, SQLModel, Relationship
 from pydub import AudioSegment
@@ -294,8 +294,8 @@ class ProcessingJob(SQLModel, table=True):
     """Represents an asynchronous processing job"""
     id: int = Field(default=None, primary_key=True)
     episode_id: str = Field(foreign_key="episode.uuid")
-    job_type: str  # "preprocess", "postprocess", "metadata", "export", "audio_edit"
-    status: str  # "pending", "processing", "completed", "failed"
+    job_type: Literal["preprocess", "postprocess", "metadata", "export", "audio_edit"]
+    status: Literal["pending", "processing", "completed", "failed"]
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
     error_message: Optional[str] = None
