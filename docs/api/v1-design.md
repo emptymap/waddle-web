@@ -80,18 +80,18 @@ This document outlines the API specification for a podcast editing web applicati
 #### 4.1 Get Annotated SRT
 - **Endpoint**: `GET /api/v1/episodes/{uuid}/annotated-srt`
 - **Description**: Retrieves annotated SRT with speaker information
-- **Response**: Annotated SRT file
+- **Response**: `AnnotatedSrtContent` model
 
 #### 4.2 Update Annotated SRT
 - **Endpoint**: `PUT /api/v1/episodes/{uuid}/annotated-srt`
 - **Description**: Updates annotated SRT
-- **Request Body**: `AnnotatedSrtUpdateRequest` model
+- **Request Body**: `AnnotatedSrtContent` model
   ```typescript
   {
     content: string; // SRT content with annotations
   }
   ```
-- **Response**: `AnnotatedSrtUpdateResponse` model
+- **Response**: `AnnotatedSrtContent` model
 
 ### 5. Metadata Generation
 
@@ -294,7 +294,7 @@ class ExportRequest(SQLModel):
     include_show_notes: Optional[bool] = True
     format: Optional[str] = "mp3"  # "mp3", "wav"
 
-class AnnotatedSrtUpdateRequest(SQLModel):
+class AnnotatedSrtContent(SQLModel):
     """Model for updating annotated SRT"""
     content: str
 
