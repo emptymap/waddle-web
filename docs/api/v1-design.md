@@ -8,7 +8,7 @@ This document outlines the API specification for a podcast editing web applicati
 ### 1. Episode Management
 
 #### 1.1 Create Episode
-- **Endpoint**: `POST /api/episodes`
+- **Endpoint**: `POST /api/v1/episodes`
 - **Description**: Creates a new episode and initiates preprocessing
 - **Request Body**: `EpisodeCreate` model
   ```typescript
@@ -23,12 +23,12 @@ This document outlines the API specification for a podcast editing web applicati
 - **Response**: `Episode` model
 
 #### 1.2 Get Episode
-- **Endpoint**: `GET /api/episodes/{uuid}`
+- **Endpoint**: `GET /api/v1/episodes/{uuid}`
 - **Description**: Retrieves episode metadata and status
 - **Response**: `Episode` model (same as Create Episode response)
 
 #### 1.3 Update Episode
-- **Endpoint**: `PUT /api/episodes/{uuid}`
+- **Endpoint**: `PUT /api/v1/episodes/{uuid}`
 - **Description**: Updates episode metadata and editor state
 - **Request Body**: `EpisodeUpdate` model
   ```typescript
@@ -45,24 +45,24 @@ This document outlines the API specification for a podcast editing web applicati
 ### 2. Audio Processing
 
 #### 2.1 Get Preprocessed Audio Files
-- **Endpoint**: `GET /api/episodes/{uuid}/audios`
+- **Endpoint**: `GET /api/v1/episodes/{uuid}/audios`
 - **Description**: Retrieves all preprocessed audio files
 - **Response**: List of `ProcessedFile` models
 
 #### 2.2 Get Single Audio File
-- **Endpoint**: `GET /api/episodes/{uuid}/audio/{file_id}`
+- **Endpoint**: `GET /api/v1/episodes/{uuid}/audio/{file_id}`
 - **Description**: Retrieves a specific audio file
 - **Response**: Audio file stream
 
 #### 2.3 Get Transcription
-- **Endpoint**: `GET /api/episodes/{uuid}/srt`
+- **Endpoint**: `GET /api/v1/episodes/{uuid}/srt`
 - **Description**: Retrieves SRT transcription file
 - **Response**: SRT file stream
 
 ### 3. Editing Status
 
 #### 3.1 Get Editing State
-- **Endpoint**: `GET /api/episodes/{uuid}/editor-state`
+- **Endpoint**: `GET /api/v1/episodes/{uuid}/editor-state`
 - **Description**: Retrieves current editing state
 - **Response**: `EditorStateResponse` model
   ```typescript
@@ -72,7 +72,7 @@ This document outlines the API specification for a podcast editing web applicati
   ```
 
 #### 3.2 Update Editing State
-- **Endpoint**: `PUT /api/episodes/{uuid}/editor-state`
+- **Endpoint**: `PUT /api/v1/episodes/{uuid}/editor-state`
 - **Description**: Updates editing state
 - **Request Body**: `EditorStateUpdate` model
   ```typescript
@@ -85,7 +85,7 @@ This document outlines the API specification for a podcast editing web applicati
 ### 4. Post-Processing
 
 #### 4.1 Initiate Post-Processing
-- **Endpoint**: `POST /api/episodes/{uuid}/postprocess`
+- **Endpoint**: `POST /api/v1/episodes/{uuid}/postprocess`
 - **Description**: Initiates Waddle postprocessing with current editor state
 - **Request Body**: `PostProcessRequest` model
   ```typescript
@@ -97,19 +97,19 @@ This document outlines the API specification for a podcast editing web applicati
 - **Response**: `JobStatusResponse` model
 
 #### 4.2 Get Post-Processed Audio
-- **Endpoint**: `GET /api/episodes/{uuid}/postprocessed-audio`
+- **Endpoint**: `GET /api/v1/episodes/{uuid}/postprocessed-audio`
 - **Description**: Retrieves the final post-processed audio
 - **Response**: Audio file stream
 
 ### 5. Transcription Management
 
 #### 5.1 Get Annotated SRT
-- **Endpoint**: `GET /api/episodes/{uuid}/annotated-srt`
+- **Endpoint**: `GET /api/v1/episodes/{uuid}/annotated-srt`
 - **Description**: Retrieves annotated SRT with speaker information
 - **Response**: Annotated SRT file
 
 #### 5.2 Update Annotated SRT
-- **Endpoint**: `PUT /api/episodes/{uuid}/annotated-srt`
+- **Endpoint**: `PUT /api/v1/episodes/{uuid}/annotated-srt`
 - **Description**: Updates annotated SRT
 - **Request Body**: `AnnotatedSrtUpdateRequest` model
   ```typescript
@@ -122,7 +122,7 @@ This document outlines the API specification for a podcast editing web applicati
 ### 6. Metadata Generation
 
 #### 6.1 Generate Metadata
-- **Endpoint**: `POST /api/episodes/{uuid}/metadata`
+- **Endpoint**: `POST /api/v1/episodes/{uuid}/metadata`
 - **Description**: Generates chapter information and show notes from annotated SRT
 - **Request Body**: `MetadataGenerationRequest` model
   ```typescript
@@ -133,19 +133,19 @@ This document outlines the API specification for a podcast editing web applicati
 - **Response**: `JobStatusResponse` model
 
 #### 6.2 Get Chapter Information
-- **Endpoint**: `GET /api/episodes/{uuid}/chapters`
+- **Endpoint**: `GET /api/v1/episodes/{uuid}/chapters`
 - **Description**: Retrieves chapter information in text format
 - **Response**: Chapter file content
 
 #### 6.3 Get Show Notes
-- **Endpoint**: `GET /api/episodes/{uuid}/show-notes`
+- **Endpoint**: `GET /api/v1/episodes/{uuid}/show-notes`
 - **Description**: Retrieves generated show notes in markdown format
 - **Response**: Show notes content
 
 ### 7. Export
 
 #### 7.1 Export Final Files
-- **Endpoint**: `POST /api/episodes/{uuid}/export`
+- **Endpoint**: `POST /api/v1/episodes/{uuid}/export`
 - **Description**: Generates final MP3, metadata, chapters, and SRT
 - **Request Body**: `ExportRequest` model
   ```typescript
@@ -158,7 +158,7 @@ This document outlines the API specification for a podcast editing web applicati
 - **Response**: `JobStatusResponse` model
 
 #### 7.2 Download Exported Files
-- **Endpoint**: `GET /api/episodes/{uuid}/export/{file_type}`
+- **Endpoint**: `GET /api/v1/episodes/{uuid}/export/{file_type}`
 - **Description**: Downloads specific export file (mp3, metadata, chapters, srt)
 - **Path Parameters**: file_type: "mp3" | "chapters" | "show_notes" | "srt"
 - **Response**: File stream
@@ -166,20 +166,20 @@ This document outlines the API specification for a podcast editing web applicati
 ### 8. Audio Editing
 
 #### 8.1 Apply Audio Edits
-- **Endpoint**: `POST /api/episodes/{uuid}/audio-edits`
+- **Endpoint**: `POST /api/v1/episodes/{uuid}/audio-edits`
 - **Description**: Applies edits to audio files based on specified time ranges
 - **Request Body**: Skeleton for audio edits (implementation depends on web interface needs)
 - **Response**: `JobStatusResponse` model
 
 #### 8.2 Get Edited Audio Files
-- **Endpoint**: `GET /api/episodes/{uuid}/edited-audio`
+- **Endpoint**: `GET /api/v1/episodes/{uuid}/edited-audio`
 - **Description**: Retrieves all edited audio files
 - **Response**: List of `ProcessedFile` models
 
 ### 9. Job Status Monitoring
 
 #### 9.1 Get Job Status
-- **Endpoint**: `GET /api/jobs/{job_id}`
+- **Endpoint**: `GET /api/v1/jobs/{job_id}`
 - **Description**: Gets status of a background processing job
 - **Response**: `JobStatusResponse` model
 
