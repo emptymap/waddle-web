@@ -14,9 +14,6 @@ This document outlines the API specification for a podcast editing web applicati
   ```typescript
   {
     title: string;
-    editor_state?: string;  // Optional initial editor state
-    preprocessed?: boolean; // Default: false
-    postprocessed?: boolean; // Default: false
   }
   ```
 - **Request Files**: Audio files (multipart/form-data)
@@ -218,9 +215,6 @@ class Episode(SQLModel, table=True):
 class EpisodeCreate(SQLModel):
     """Model for creating a new episode"""
     title: str
-    editor_state: Optional[str] = ""
-    preprocessed: Optional[bool] = False
-    postprocessed: Optional[bool] = False
 
 class EpisodeUpdate(SQLModel):
     """Model for updating an existing episode"""
