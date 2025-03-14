@@ -68,7 +68,7 @@ This document outlines the API specification for a podcast editing web applicati
     no_noise_remove?: boolean; // Optional, default: false
   }
   ```
-- **Response**: `JobStatusResponse` model
+- **Response**: `ProcessingJob` model
 
 #### 3.2 Get Post-Processed Audio
 - **Endpoint**: `GET /api/v1/episodes/{uuid}/postprocessed-audio`
@@ -104,7 +104,7 @@ This document outlines the API specification for a podcast editing web applicati
     audio_file_id?: number; // Optional specific audio file ID to use
   }
   ```
-- **Response**: `JobStatusResponse` model
+- **Response**: `ProcessingJob` model
 
 #### 5.2 Get Chapter Information
 - **Endpoint**: `GET /api/v1/episodes/{uuid}/chapters`
@@ -129,7 +129,7 @@ This document outlines the API specification for a podcast editing web applicati
     format?: string; // Optional: "mp3" | "wav", default: "mp3"
   }
   ```
-- **Response**: `JobStatusResponse` model
+- **Response**: `ProcessingJob` model
 
 #### 6.2 Download Exported Files
 - **Endpoint**: `GET /api/v1/episodes/{uuid}/export/{file_type}`
@@ -143,7 +143,7 @@ This document outlines the API specification for a podcast editing web applicati
 - **Endpoint**: `POST /api/v1/episodes/{uuid}/audio-edits`
 - **Description**: Applies edits to audio files based on specified time ranges
 - **Request Body**: Skeleton for audio edits (implementation depends on web interface needs)
-- **Response**: `JobStatusResponse` model
+- **Response**: `ProcessingJob` model
 
 #### 7.2 Get Edited Audio Files
 - **Endpoint**: `GET /api/v1/episodes/{uuid}/edited-audio`
@@ -306,15 +306,6 @@ class AnnotatedSrtUpdateResponse(SQLModel):
     is_annotated: bool
     updated_at: datetime
 
-class JobStatusResponse(SQLModel):
-    """Model for job status information"""
-    id: int
-    episode_id: str
-    job_type: str
-    status: str
-    created_at: datetime
-    updated_at: datetime
-    error_message: Optional[str] = None
 ```
 
 ## Implementation Guide
@@ -488,3 +479,4 @@ async def run_preprocessing(
     finally:
         db.commit()
         db.close()
+```
