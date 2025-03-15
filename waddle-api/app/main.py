@@ -6,6 +6,7 @@ from typing import Annotated, List
 from fastapi import BackgroundTasks, Depends, FastAPI, Query, UploadFile
 from platformdirs import user_data_dir
 from sqlmodel import Session, select
+from waddle.processor import preprocess_multi_files
 
 from app.db import create_db_and_tables, get_session
 from app.defaults import APP_AUTHOR, APP_NAME
@@ -38,7 +39,7 @@ def read_episodes(
 
 
 @app.post("/episodes/")
-async def create_episode(files: list[UploadFile], background_tasks: BackgroundTasks, db: SessionDep):
+async def create_episode(files: list[UploadFile], db: SessionDep, background_tasks: BackgroundTasks):
     new_episode = Episode(title=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
     # Set up storage directories
@@ -64,7 +65,7 @@ async def create_episode(files: list[UploadFile], background_tasks: BackgroundTa
         db.add(job)
         db.commit()
 
-        background_tasks.add_task(run_preprocessing, job.id, new_episode.uuid)
+        background_tasks.add_task(run_preprocessing, job.id, new_episode.uuid, db)
 
         return new_episode
 
@@ -73,56 +74,28 @@ async def create_episode(files: list[UploadFile], background_tasks: BackgroundTa
 
 
 # Background preprocessing task
-async def run_preprocessing(job_id: int, episode_uuid: str):
-    print("Running preprocessing task")
-    # db = get_db_session()
+def run_preprocessing(job_id: int, episode_uuid: str, db: Session):
+    job = db.get(ProcessingJob, job_id)
+    if not job:
+        return
 
-    # # Update job status
-    # job = db.get(ProcessingJob, job_id)
-    # job.status = "processing"
-    # db.commit()
+    episode = db.get(Episode, episode_uuid)
+    if not episode:
+        return
 
-    # try:
-    #     # Get episode
-    #     episode = db.get(Episode, episode_uuid)
-    #     source_dir = Path(episode.storage_path) / "source"
-    #     output_dir = Path(episode.storage_path) / "preprocessed"
-    #     output_dir.mkdir(exist_ok=True)
+    job.status = JobStatus.processing
+    db.commit()
 
-    #     # Prepare parameters for Waddle preprocessing
-    #     reference_path = Path(reference_file.file_path) if reference_file else None
+    try:
+        episode_dir = app_dir / "episodes" / episode_uuid
+        preprocess_multi_files(reference=None, source_dir=episode_dir / "source", output_dir=episode_dir / "preprocessed")
+        episode.preprocessed = True
+        job.status = JobStatus.completed
 
-    #     # Run Waddle preprocessing function
-    #     processed_files = preprocess_multi_files(reference=reference_path, source_dir=source_dir, output_dir=output_dir, generate_transcript=True)
+    except Exception as e:
+        job.status = JobStatus.failed
+        job.error_message = str(e)
 
-    #     # Save processed file references to database
-    #     for proc_file in processed_files:
-    #         processed_file = ProcessedFile(
-    #             episode_id=episode_uuid,
-    #             filename=proc_file.name,
-    #             file_path=str(proc_file),
-    #             file_type="preprocessed",
-    #             speaker_name=extract_speaker_name(proc_file.name),
-    #         )
-    #         db.add(processed_file)
-
-    #     # Add transcription record
-    #     srt_path = output_dir / "transcript.srt"
-    #     if srt_path.exists():
-    #         transcription = Transcription(episode_id=episode_uuid, file_path=str(srt_path), is_annotated=False)
-    #         db.add(transcription)
-
-    #     # Update episode status
-    #     episode.preprocessed = True
-
-    #     # Update job status
-    #     job.status = "completed"
-
-    # except Exception as e:
-    #     # Handle errors
-    #     job.status = "failed"
-    #     job.error_message = str(e)
-
-    # finally:
-    #     db.commit()
-    #     db.close()
+    finally:
+        db.commit()
+        db.close()
