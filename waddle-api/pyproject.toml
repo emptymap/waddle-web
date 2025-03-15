@@ -26,7 +26,7 @@ dev = [
 ]
 
 [tool.ruff]
-line-length = 79
+line-length = 160
 exclude = [".venv", "venv", "migrations", "__pycache__", "build", "dist"]
 target-version = "py313"
 
