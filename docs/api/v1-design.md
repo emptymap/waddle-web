@@ -68,7 +68,6 @@ This document outlines the API specification for a podcast editing web applicati
     no_noise_remove?: boolean; // Optional, default: false
   }
   ```
-- **Response**: `ProcessingJob` model
 
 #### 3.2 Get Post-Processed Audio
 - **Endpoint**: `GET /api/v1/episodes/{uuid}/postprocessed-audio`
@@ -104,7 +103,6 @@ This document outlines the API specification for a podcast editing web applicati
     audio_file_id?: number; // Optional specific audio file ID to use
   }
   ```
-- **Response**: `ProcessingJob` model
 
 #### 5.2 Get Chapter Information
 - **Endpoint**: `GET /api/v1/episodes/{uuid}/chapters`
@@ -129,7 +127,6 @@ This document outlines the API specification for a podcast editing web applicati
     format?: string; // Optional: "mp3" | "wav", default: "mp3"
   }
   ```
-- **Response**: `ProcessingJob` model
 
 #### 6.2 Download Exported Files
 - **Endpoint**: `GET /api/v1/episodes/{uuid}/export/{file_type}`
@@ -143,19 +140,11 @@ This document outlines the API specification for a podcast editing web applicati
 - **Endpoint**: `POST /api/v1/episodes/{uuid}/audio-edits`
 - **Description**: Applies edits to audio files based on specified time ranges
 - **Request Body**: Skeleton for audio edits (implementation depends on web interface needs)
-- **Response**: `ProcessingJob` model
 
 #### 7.2 Get Edited Audio Files
 - **Endpoint**: `GET /api/v1/episodes/{uuid}/edited-audio`
 - **Description**: Retrieves all edited audio files
 - **Response**: List of `ProcessedFile` models
-
-### 8. Job Status Monitoring
-
-#### 8.1 Get Job Status
-- **Endpoint**: `GET /api/v1/jobs/{job_id}`
-- **Description**: Gets status of a background processing job
-- **Response**: `JobStatusResponse` model
 
 
 ## Data Models
