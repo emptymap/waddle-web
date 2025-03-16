@@ -8,6 +8,7 @@ license = { text = "MIT"}
 authors = [
   {name = "emptymap", email = "youremail@example.aaa"}
 ]
+packages = [{include = "app"}]
 dependencies = [
     "fastapi[standard]>=0.115.11",
     "sqlmodel>=0.0.16",
