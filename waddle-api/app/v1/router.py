@@ -65,24 +65,6 @@ async def create_episode(files: list[UploadFile], db: SessionDep, background_tas
         return {"error": str(e)}
 
 
-@v1_router.patch("/episodes/{episode_id}", response_model=Episode)
-def update_episode(episode_id: str, update_data: UpdateEpisodeRequest, session: SessionDep):
-    """Update an existing episode"""
-    episode = session.get(Episode, episode_id)
-    if not episode:
-        return {"error": "Episode not found"}
-
-    update_dict = update_data.model_dump(exclude_unset=True)
-    for key, value in update_dict.items():
-        setattr(episode, key, value)
-
-    session.add(episode)
-    session.commit()
-    session.refresh(episode)
-
-    return episode
-
-
 # Background preprocessing task
 def run_preprocessing(job_id: int, episode_uuid: str, db: Session):
     job = db.get(ProcessingJob, job_id)
@@ -109,3 +91,34 @@ def run_preprocessing(job_id: int, episode_uuid: str, db: Session):
     finally:
         db.commit()
         db.close()
+
+
+@v1_router.patch("/episodes/{episode_id}", response_model=Episode)
+def update_episode(episode_id: str, update_data: UpdateEpisodeRequest, session: SessionDep):
+    """Update an existing episode"""
+    episode = session.get(Episode, episode_id)
+    if not episode:
+        return {"error": "Episode not found"}
+
+    update_dict = update_data.model_dump(exclude_unset=True)
+    for key, value in update_dict.items():
+        setattr(episode, key, value)
+
+    session.add(episode)
+    session.commit()
+    session.refresh(episode)
+
+    return episode
+
+
+@v1_router.delete("/episodes/{episode_id}")
+def delete_episode(episode_id: str, session: SessionDep):
+    """Delete an episode"""
+    episode = session.get(Episode, episode_id)
+    if not episode:
+        return {"error": "Episode not found"}
+
+    session.delete(episode)
+    session.commit()
+
+    return {"message": "Episode deleted"}
