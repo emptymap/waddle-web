@@ -1,8 +1,10 @@
 import io
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import BinaryIO, Generator, List, Tuple
 
 import pytest
+from _pytest.monkeypatch import MonkeyPatch  # Import the MonkeyPatch type
 from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine, select
 from sqlmodel.pool import StaticPool
@@ -16,7 +18,7 @@ tests_dir = Path(__file__).resolve().parent
 
 # https://sqlmodel.tiangolo.com/tutorial/fastapi/tests/#configure-the-in-memory-database
 @pytest.fixture(name="session")
-def session_fixture():
+def session_fixture() -> Generator[Session]:
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
@@ -25,7 +27,7 @@ def session_fixture():
 
 # https://sqlmodel.tiangolo.com/tutorial/fastapi/tests/#client-fixture
 @pytest.fixture(name="client")
-def client_fixture(session: Session):
+def client_fixture(session: Session) -> Generator[TestClient]:
     """
     Create a test client with an overridden session dependency.
     """
@@ -39,14 +41,14 @@ def client_fixture(session: Session):
     app.dependency_overrides.clear()
 
 
-def test_read_episodes_empty(client: TestClient):
+def test_read_episodes_empty(client: TestClient) -> None:
     """Test reading episodes when the database is empty."""
     response = client.get("/v1/episodes/")
     assert response.status_code == 200
     assert response.json() == []
 
 
-def test_read_episodes(session: Session, client: TestClient):
+def test_read_episodes(session: Session, client: TestClient) -> None:
     """Test reading episodes with data in the database."""
     # Create test episodes
     episode_1 = Episode(title="Episode 1")
@@ -71,7 +73,7 @@ def test_read_episodes(session: Session, client: TestClient):
     assert data[0]["title"] == episode_2.title
 
 
-def test_create_episode_with_wavs(session: Session, client: TestClient, monkeypatch):
+def test_create_episode_with_wavs(session: Session, client: TestClient, monkeypatch: MonkeyPatch) -> None:
     """Test creating a new episode with multiple WAV files from tests/ep0 directory."""
     with TemporaryDirectory() as temp_dir:
         monkeypatch.setattr("app.v1.router.app_dir", Path(temp_dir))
@@ -83,7 +85,7 @@ def test_create_episode_with_wavs(session: Session, client: TestClient, monkeypa
         assert len(wav_files) > 0, f"No WAV files found in {wav_dir}"
 
         # Prepare files for upload
-        files = []
+        files: List[Tuple[str, Tuple[str, BinaryIO, str]]] = []
         for wav_path in wav_files:
             with open(wav_path, "rb") as f:
                 wav_content = f.read()
@@ -114,7 +116,7 @@ def test_create_episode_with_wavs(session: Session, client: TestClient, monkeypa
         assert job is not None
 
 
-def test_update_episode(session: Session, client: TestClient):
+def test_update_episode(session: Session, client: TestClient) -> None:
     """Test updating an episode."""
     # Create a test episode
     episode = Episode(title="Original Title")
@@ -134,7 +136,7 @@ def test_update_episode(session: Session, client: TestClient):
     assert updated_episode.title == "Updated Title"
 
 
-def test_update_episode_not_found(client: TestClient):
+def test_update_episode_not_found(client: TestClient) -> None:
     """Test updating a non-existent episode."""
     response = client.patch("/v1/episodes/nonexistent-id", json={"title": "Updated Title"})
 
@@ -142,7 +144,7 @@ def test_update_episode_not_found(client: TestClient):
     assert response.json()["detail"] == "Episode not found"
 
 
-def test_delete_episode(session: Session, client: TestClient):
+def test_delete_episode(session: Session, client: TestClient) -> None:
     """Test deleting an episode."""
     # Create a test episode
     episode = Episode(title="Test Episode")
@@ -159,7 +161,7 @@ def test_delete_episode(session: Session, client: TestClient):
     assert deleted_episode is None
 
 
-def test_delete_episode_not_found(client: TestClient):
+def test_delete_episode_not_found(client: TestClient) -> None:
     """Test deleting a non-existent episode."""
     response = client.delete("/v1/episodes/nonexistent-id")
 
