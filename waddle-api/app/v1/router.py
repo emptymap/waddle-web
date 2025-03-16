@@ -30,7 +30,14 @@ def read_episodes(
     return list(episodes)
 
 
-@v1_router.post("/episodes/", status_code=status.HTTP_201_CREATED)
+@v1_router.post(
+    "/episodes/",
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        status.HTTP_400_BAD_REQUEST: {"description": "No file name provided"},
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "Internal server error"},
+    },
+)
 async def create_episode(files: list[UploadFile], db: SessionDep, background_tasks: BackgroundTasks) -> Episode:
     new_episode = Episode(title=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
@@ -81,7 +88,13 @@ def run_preprocessing(job_id: int, episode_uuid: str, db: Session) -> None:
         db.close()
 
 
-@v1_router.patch("/episodes/{episode_id}", response_model=Episode)
+@v1_router.patch(
+    "/episodes/{episode_id}",
+    response_model=Episode,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Episode not found"},
+    },
+)
 def update_episode(episode_id: str, update_data: UpdateEpisodeRequest, session: SessionDep) -> Episode:
     """Update an existing episode"""
     episode = session.get(Episode, episode_id)
@@ -96,7 +109,7 @@ def update_episode(episode_id: str, update_data: UpdateEpisodeRequest, session: 
     return episode
 
 
-@v1_router.delete("/episodes/{episode_id}", status_code=status.HTTP_204_NO_CONTENT)
+@v1_router.delete("/episodes/{episode_id}", status_code=status.HTTP_204_NO_CONTENT, responses={status.HTTP_404_NOT_FOUND: {"description": "Episode not found"}})
 def delete_episode(episode_id: str, session: SessionDep) -> None:
     """Delete an episode"""
     episode = session.get(Episode, episode_id)
