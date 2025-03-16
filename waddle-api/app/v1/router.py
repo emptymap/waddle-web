@@ -9,7 +9,7 @@ from waddle.processor import preprocess_multi_files
 
 from app.db import get_session
 from app.defaults import APP_AUTHOR, APP_NAME
-from app.models import Episode, JobStatus, JobType, ProcessingJob
+from app.models import Episode, JobStatus, JobType, ProcessingJob, UpdateEpisodeRequest
 
 SessionDep = Annotated[Session, Depends(get_session)]
 app_dir = Path(user_data_dir(APP_NAME, APP_AUTHOR))
@@ -63,6 +63,24 @@ async def create_episode(files: list[UploadFile], db: SessionDep, background_tas
 
     except Exception as e:
         return {"error": str(e)}
+
+
+@v1_router.patch("/episodes/{episode_id}", response_model=Episode)
+def update_episode(episode_id: str, update_data: UpdateEpisodeRequest, session: SessionDep):
+    """Update an existing episode"""
+    episode = session.get(Episode, episode_id)
+    if not episode:
+        return {"error": "Episode not found"}
+
+    update_dict = update_data.model_dump(exclude_unset=True)
+    for key, value in update_dict.items():
+        setattr(episode, key, value)
+
+    session.add(episode)
+    session.commit()
+    session.refresh(episode)
+
+    return episode
 
 
 # Background preprocessing task
