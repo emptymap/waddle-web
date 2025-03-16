@@ -8,7 +8,6 @@ license = { text = "MIT"}
 authors = [
   {name = "emptymap", email = "youremail@example.aaa"}
 ]
-packages = [{include = "app"}]
 dependencies = [
     "fastapi[standard]>=0.115.11",
     "sqlmodel>=0.0.16",
@@ -26,6 +25,9 @@ dev = [
     "pyright>=1.1.394",
     "invoke>=2.2.0",
 ]
+
+[tool.setuptools.packages.find]
+where = ["app"] 
 
 [tool.ruff]
 line-length = 160
