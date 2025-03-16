@@ -24,14 +24,14 @@ def read_episodes(
     session: SessionDep,
     offset: Annotated[int, Query(ge=0, description="Offset the number of episodes returned")] = 0,
     limit: Annotated[int, Query(le=100, description="Limit the number of episodes returned")] = 100,
-):
+) -> List[Episode]:
     """Read all episodes"""
     episodes = session.exec(select(Episode).offset(offset).limit(limit)).all()
-    return episodes
+    return list(episodes)
 
 
 @v1_router.post("/episodes/", status_code=status.HTTP_201_CREATED)
-async def create_episode(files: list[UploadFile], db: SessionDep, background_tasks: BackgroundTasks):
+async def create_episode(files: list[UploadFile], db: SessionDep, background_tasks: BackgroundTasks) -> Episode:
     new_episode = Episode(title=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
     storage_path = app_dir / "episodes" / new_episode.uuid
@@ -59,7 +59,7 @@ async def create_episode(files: list[UploadFile], db: SessionDep, background_tas
 
 
 # Background preprocessing task
-def run_preprocessing(job_id: int, episode_uuid: str, db: Session):
+def run_preprocessing(job_id: int, episode_uuid: str, db: Session) -> None:
     job = db.get(ProcessingJob, job_id)
     if not job:
         return
@@ -82,7 +82,7 @@ def run_preprocessing(job_id: int, episode_uuid: str, db: Session):
 
 
 @v1_router.patch("/episodes/{episode_id}", response_model=Episode)
-def update_episode(episode_id: str, update_data: UpdateEpisodeRequest, session: SessionDep):
+def update_episode(episode_id: str, update_data: UpdateEpisodeRequest, session: SessionDep) -> Episode:
     """Update an existing episode"""
     episode = session.get(Episode, episode_id)
     if not episode:
@@ -97,7 +97,7 @@ def update_episode(episode_id: str, update_data: UpdateEpisodeRequest, session: 
 
 
 @v1_router.delete("/episodes/{episode_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_episode(episode_id: str, session: SessionDep):
+def delete_episode(episode_id: str, session: SessionDep) -> None:
     """Delete an episode"""
     episode = session.get(Episode, episode_id)
     if not episode:
