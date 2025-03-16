@@ -9,4 +9,4 @@ services:
     working_dir: /app
     environment:
       - PYTHONUNBUFFERED=1
-    command: ["uv", "run", "src/waddle-api"]
+    command: ["uv", "run", "fastapi", "dev"]
