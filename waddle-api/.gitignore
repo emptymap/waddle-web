@@ -13,3 +13,5 @@ wheels/
 coverage.*
 
 database.db
+
+out/
