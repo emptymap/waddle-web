@@ -13,6 +13,7 @@ dependencies = [
     "sqlmodel>=0.0.16",
     "alembic>=1.13.1",
     "nanoid>=2.0.0",
+    "waddle-ai>=0.1.1",
 ]
 
 [dependency-groups]
@@ -26,7 +27,7 @@ dev = [
 ]
 
 [tool.ruff]
-line-length = 79
+line-length = 160
 exclude = [".venv", "venv", "migrations", "__pycache__", "build", "dist"]
 target-version = "py313"
 
