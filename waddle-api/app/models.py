@@ -25,6 +25,16 @@ class CreateEpisodeRequest(SQLModel):
     title: str
 
 
+class UpdateEpisodeRequest(SQLModel):
+    """Model for updating an existing episode"""
+
+    title: Optional[str] = None
+    editor_state: Optional[str] = None
+    preprocessed: Optional[bool] = None
+    postprocessed: Optional[bool] = None
+    metadata_generated: Optional[bool] = None
+
+
 class JobType(str, Enum):
     """Enum for processing job types"""
 
