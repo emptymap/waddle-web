@@ -63,7 +63,7 @@ async def create_episode(
         background_tasks.add_task(run_preprocessing, job.id, new_episode.uuid, db)
         return new_episode
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e
 
 
 # Background preprocessing task
