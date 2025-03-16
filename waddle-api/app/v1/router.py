@@ -1,8 +1,7 @@
-from datetime import datetime
 from pathlib import Path
 from typing import Annotated, List
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Query, UploadFile, status
 from platformdirs import user_data_dir
 from sqlmodel import Session, select
 from waddle.processor import preprocess_multi_files
@@ -38,8 +37,10 @@ def read_episodes(
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "Internal server error"},
     },
 )
-async def create_episode(files: list[UploadFile], db: SessionDep, background_tasks: BackgroundTasks) -> Episode:
-    new_episode = Episode(title=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+async def create_episode(
+    files: list[UploadFile], db: SessionDep, background_tasks: BackgroundTasks, title: Annotated[str, Form(description="Episode title")] = ""
+) -> Episode:
+    new_episode = Episode(title=title)
 
     storage_path = app_dir / "episodes" / new_episode.uuid
     storage_path.mkdir(parents=True, exist_ok=True)
