@@ -78,7 +78,7 @@ def run_preprocessing(job_id: int, episode_uuid: str, db: Session) -> None:
     db.commit()
     try:
         episode_dir = app_dir / "episodes" / episode_uuid
-        preprocess_multi_files(reference=None, source_dir=episode_dir / "source", output_dir=episode_dir / "preprocessed")
+        preprocess_multi_files(reference=None, source_dir=episode_dir / "source", output_dir=episode_dir / "preprocessed", transcribe=True)
         episode.preprocessed = True
         job.status = JobStatus.completed
     except Exception as e:
