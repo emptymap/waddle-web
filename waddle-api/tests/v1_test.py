@@ -11,7 +11,7 @@ from sqlmodel.pool import StaticPool
 
 from app.db import get_session
 from app.main import app
-from app.models import Episode, ProcessingJob
+from app.models import Episode, JobStatus, ProcessingJob
 
 tests_dir = Path(__file__).resolve().parent
 
@@ -74,15 +74,17 @@ def test_read_episodes(session: Session, client: TestClient) -> None:
 
 
 def test_create_episode_with_wavs(session: Session, client: TestClient, monkeypatch: MonkeyPatch) -> None:
-    """Test creating a new episode with multiple WAV files from tests/ep0 directory."""
+    """Test creating a new episode with multiple WAV files and wait for preprocessing to complete."""
+
     with TemporaryDirectory() as temp_dir:
         monkeypatch.setattr("app.v1.router.app_dir", Path(temp_dir))
 
         wav_dir = Path("tests/ep0")
         assert wav_dir.exists(), f"Test directory {wav_dir} does not exist"
 
-        wav_files = list(wav_dir.glob("*.wav"))
+        wav_files = sorted(wav_dir.glob("*.wav"))
         assert len(wav_files) > 0, f"No WAV files found in {wav_dir}"
+        wav_files = wav_files[:2]  # Limit to 2 files for faster testing
 
         # Prepare files for upload
         files: List[Tuple[str, Tuple[str, BinaryIO, str]]] = []
@@ -100,20 +102,33 @@ def test_create_episode_with_wavs(session: Session, client: TestClient, monkeypa
         assert data["title"] == "Test Episode with WAVs"
         assert data["preprocessed"] is False
 
-        # Verify that files were saved
+        # Verify that source files were saved
         episode_dir = Path(temp_dir) / "episodes" / data["uuid"]
         assert episode_dir.exists()
 
-        # Check if all uploaded files are present in the episode directory
+        # Check that source files were saved
         source_dir = episode_dir / "source"
         saved_files = list(source_dir.glob("*.wav"))
         assert len(saved_files) == len(wav_files)
 
-        # Verify that a preprocessing job was created
-        jobs = session.exec(select(ProcessingJob)).all()
+        # Get the processing job
+        jobs = session.exec(select(ProcessingJob).where(ProcessingJob.episode_id == data["uuid"])).all()
         assert len(jobs) >= 1
-        job = next((j for j in jobs if j.episode_id == data["uuid"]), None)
+        job = jobs[0]
         assert job is not None
+        assert job.status == JobStatus.completed
+
+        # Verify that preprocessed files exist
+        preprocessed_dir = episode_dir / "preprocessed"
+        assert preprocessed_dir.exists()
+
+        # Check that preprocessed files were generated
+        preprocessed_files = list(preprocessed_dir.glob("*.wav"))
+        assert len(preprocessed_files) == (len(wav_files) - 1)
+
+        # Optional: Check for transcription files if your preprocessor generates them
+        transcript_files = list(preprocessed_dir.glob("*.srt"))
+        assert len(transcript_files) > 0
 
 
 def test_update_episode(session: Session, client: TestClient) -> None:
