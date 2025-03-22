@@ -82,9 +82,9 @@ def test_create_episode_with_wavs(session: Session, client: TestClient, monkeypa
         wav_dir = Path("tests/ep0")
         assert wav_dir.exists(), f"Test directory {wav_dir} does not exist"
 
-        wav_files = sorted(wav_dir.glob("*.wav"))
-        assert len(wav_files) > 0, f"No WAV files found in {wav_dir}"
-        wav_files = wav_files[:2]  # Limit to 2 files for faster testing
+        ref_file = next(wav_dir.glob("GMT*.wav"))
+        spk_files = sorted([f for f in wav_dir.glob("*.wav") if not f.name.startswith("GMT")])
+        wav_files = [ref_file, spk_files[0]]
 
         # Prepare files for upload
         files: List[Tuple[str, Tuple[str, BinaryIO, str]]] = []
