@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 from typing import Annotated, List
 
@@ -127,4 +128,9 @@ def delete_episode(episode_id: str, session: SessionDep) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
     session.delete(episode)
     session.commit()
+
+    episode_dir = app_dir / "episodes" / episode_id
+    if episode_dir.exists():
+        shutil.rmtree(episode_dir)
+
     return None  # Using 204 No Content for successful deletion
