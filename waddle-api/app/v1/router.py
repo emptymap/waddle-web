@@ -101,9 +101,18 @@ def update_episode(episode_id: str, update_data: UpdateEpisodeRequest, session: 
     episode = session.get(Episode, episode_id)
     if not episode:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
-    update_dict = update_data.model_dump(exclude_unset=True)
-    for key, value in update_dict.items():
-        setattr(episode, key, value)
+
+    if update_data.title is not None:
+        episode.title = update_data.title
+    if update_data.editor_state is not None:
+        episode.editor_state = update_data.editor_state
+    if update_data.preprocessed is not None:
+        episode.preprocessed = update_data.preprocessed
+    if update_data.postprocessed is not None:
+        episode.postprocessed = update_data.postprocessed
+    if update_data.metadata_generated is not None:
+        episode.metadata_generated = update_data.metadata_generated
+
     session.add(episode)
     session.commit()
     session.refresh(episode)
