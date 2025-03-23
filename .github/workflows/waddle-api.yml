@@ -1,0 +1,73 @@
+name: Waddle API CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "waddle-api/**"
+      - ".github/workflows/waddle-api.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "waddle-api/**"
+      - ".github/workflows/waddle-api.yml"
+
+jobs:
+  ci-checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./waddle-api
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: emptymap/setup-ffmpeg@5644f1ea8a58c026223ed8d5147314e7fb7ae3ba
+        id: setup-ffmpeg
+        with:
+          ffmpeg-version: 7.0.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install Python dependencies
+        run: |
+          uv venv
+          uv pip install -e ".[dev]"
+
+      - name: Run checks
+        run: |
+          uv run ruff check
+          uv run ruff format
+
+      - name: Run Pyright
+        run: uv run pyright
+
+      - name: Run tests with coverage
+        run: |
+          uv run pytest --cov=app --junitxml=junit.xml -o junit_family=legacy --cov-report "xml:coverage.xml" --cov-report=term-missing --cov-config=pyproject.toml
+        env:
+          WHISPER_MODEL_NAME: "tiny"
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: ./waddle-api
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./waddle-api/junit.xml

@@ -13,6 +13,7 @@ dependencies = [
     "sqlmodel>=0.0.16",
     "alembic>=1.13.1",
     "nanoid>=2.0.0",
+    "waddle-ai>=0.1.2",
 ]
 
 [dependency-groups]
@@ -25,19 +26,40 @@ dev = [
     "invoke>=2.2.0",
 ]
 
+[tool.setuptools.packages.find]
+where = ["app"] 
+
 [tool.ruff]
-line-length = 79
+line-length = 160
 exclude = [".venv", "venv", "migrations", "__pycache__", "build", "dist"]
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["E", "F"]
-fixable = ["ALL"]
+select = [
+    "E", # pycodestyle errors
+    "W", # pycodestyle warnings
+    "F", # pyflakes
+    "I", # isort
+    "B", # flake8-bugbear
+]
 
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
 line-ending = "auto"
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.13"
+typeCheckingMode = "strict"
+reportMissingImports = true
+reportMissingTypeStubs = false
+useLibraryCodeForTypes = true
+include = ["app", "tests"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
 
 [tool.coverage.run]
 source = ["app"]
