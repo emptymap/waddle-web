@@ -289,7 +289,8 @@ function Index() {
 							<Card.Footer>
 								<Flex justifyContent="flex-end">
 									{episode.uuid && (
-										<RouterLink to={`/episodes/${episode.uuid}`}>
+										<RouterLink to={`/`}>
+											{/* TODO: Replace `/episodes/${episode.uuid}` with the correct route */}
 											<Button
 												size="sm"
 												mr={2}

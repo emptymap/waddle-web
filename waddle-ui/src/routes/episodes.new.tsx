@@ -187,24 +187,26 @@ function NewEpisode() {
 											{audioFiles.length} file(s) selected - Total size:{" "}
 											{getTotalSize().toFixed(2)} MB
 										</Text>
-										<SimpleGrid columns={3} gap={2}>
+
+										{/* Improved grid layout with better spacing */}
+										<SimpleGrid columns={{ base: 2, md: 3 }} gap={4}>
 											{audioFiles.map((file, index) => (
 												<Box
-													key={`audio-file-${file.name}`}
-													p={2}
+													key={`audio-file-${index}-${file.name}`}
+													p={3}
 													borderWidth="1px"
 													borderRadius="md"
 													borderStyle="solid"
 													borderColor="gray.200"
-													mb={2}
 												>
-													<Flex
-														justifyContent="space-between"
-														alignItems="center"
-														height="100%"
-													>
-														<Box>
-															<Text fontSize="sm" fontWeight="medium">
+													<Flex direction="column" height="100%">
+														<Box mb={2} overflowX="hidden">
+															<Text
+																fontSize="sm"
+																fontWeight="medium"
+																truncate
+																title={file.name}
+															>
 																{file.name}
 															</Text>
 															<Text fontSize="xs" color="gray.500">
@@ -216,6 +218,8 @@ function NewEpisode() {
 															variant="ghost"
 															colorScheme="red"
 															onClick={() => removeFile(index)}
+															alignSelf="flex-end"
+															mt="auto"
 														>
 															<Trash2 size={14} /> Remove
 														</Button>
