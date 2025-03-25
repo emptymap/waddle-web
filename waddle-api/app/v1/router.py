@@ -201,6 +201,10 @@ def get_audio_file(episode_id: str, file_name: str, session: SessionDep) -> File
     episode = _get_episode_or_404(episode_id, session)
     _check_preprocessing_or_400(episode)
 
+    # Validate and sanitize file_name to prevent directory traversal
+    if ".." in file_name or "/" in file_name or "\\" in file_name:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid file name")
+
     audio_file_path = app_dir / "episodes" / episode_id / "preprocessed" / file_name
     if not audio_file_path.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audio file not found")
