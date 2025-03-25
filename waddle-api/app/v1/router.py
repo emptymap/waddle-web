@@ -408,16 +408,16 @@ def get_postprocessed_audio(episode_id: str, session: SessionDep) -> FileRespons
     if not audio_files:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post-processed audio file not found")
 
-    final_audio = None
+    combined_audio = None
     for audio_file in audio_files:
         audio_prefix = audio_file.stem
         if "-" not in audio_prefix:
-            final_audio = audio_file
+            combined_audio = audio_file
             break
-    if final_audio is None:
-        final_audio = audio_files[0]
+    if combined_audio is None:
+        combined_audio = audio_files[0]
 
-    return FileResponse(path=final_audio, media_type="audio/wav", filename=final_audio.name)
+    return FileResponse(path=combined_audio, media_type="audio/wav", filename=combined_audio.name)
 
 
 #####################################
