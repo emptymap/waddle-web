@@ -29,12 +29,6 @@ class Episode(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.now)
 
 
-class CreateEpisodeRequest(SQLModel):
-    """Model for creating a new episode"""
-
-    title: str
-
-
 class UpdateEpisodeRequest(SQLModel):
     """Model for updating an existing episode"""
 
