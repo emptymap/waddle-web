@@ -141,16 +141,7 @@ function NewEpisode() {
 								Episode Title
 								<Field.RequiredIndicator />
 							</Field.Label>
-							<Input
-								id="title"
-								placeholder="Enter episode title"
-								{...register("title", {
-									required: "Title is required",
-								})}
-							/>
-							{errors.title && (
-								<Field.ErrorText>{errors.title.message}</Field.ErrorText>
-							)}
+							<Input id="title" placeholder="Enter episode title" />
 						</Field.Root>
 
 						<Field.Root invalid={audioFiles.length === 0}>
