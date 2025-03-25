@@ -68,6 +68,14 @@ function Index() {
 
 	useEffect(() => {
 		fetchEpisodes();
+
+		const POLLING_INTERVAL = 5000;
+		const intervalId = setInterval(() => {
+			console.log("Polling for new episodes...");
+			fetchEpisodes();
+		}, POLLING_INTERVAL);
+
+		return () => clearInterval(intervalId);
 	}, [fetchEpisodes]);
 
 	const handleDeleteClick = (episodeId: string, title?: string) => {
@@ -216,10 +224,7 @@ function Index() {
 							<Card.Footer>
 								<Flex justifyContent="flex-end">
 									{episode.uuid && (
-										<RouterLink
-											to="/episodes/$episodeId"
-											params={{ episodeId: episode.uuid }}
-										>
+										<RouterLink to={`/episodes/${episode.uuid}`}>
 											<Button size="sm" mr={2}>
 												<Edit size={14} /> Edit
 											</Button>
