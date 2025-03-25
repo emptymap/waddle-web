@@ -13,9 +13,9 @@ export type BodyCreateEpisodeV1EpisodesPost = {
  */
 export type Episode = {
     uuid?: string;
-    preprocessed?: boolean;
-    postprocessed?: boolean;
-    metadata_generated?: boolean;
+    preprocess_status?: JobStatus;
+    postprocess_status?: JobStatus;
+    metadata_generation_status?: JobStatus;
     editor_state?: string;
     title?: string;
     created_at?: string;
@@ -27,14 +27,16 @@ export type HttpValidationError = {
 };
 
 /**
+ * Enum for processing job status
+ */
+export type JobStatus = 'init' | 'pending' | 'processing' | 'completed' | 'failed';
+
+/**
  * Model for updating an existing episode
  */
 export type UpdateEpisodeRequest = {
     title?: string | null;
     editor_state?: string | null;
-    preprocessed?: boolean | null;
-    postprocessed?: boolean | null;
-    metadata_generated?: boolean | null;
 };
 
 export type ValidationError = {
