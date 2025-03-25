@@ -6,6 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Qu
 from fastapi.responses import FileResponse
 from platformdirs import user_data_dir
 from sqlmodel import Session, select
+from waddle.processing.combine import combine_audio_files
 from waddle.processor import postprocess_multi_files, preprocess_multi_files
 
 from app.db import get_session
@@ -242,6 +243,63 @@ def get_transcription(episode_id: str, session: SessionDep) -> str:
 
 
 #####################################
+# MARK: Audio editing endpoints
+# TODO: Implement audio editing endpoints
+#####################################
+audio_editing_router = APIRouter(tags=["audio_editing"])
+
+
+@audio_editing_router.post(
+    "/episodes/{episode_id}/audio-edits",
+    status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Episode not found"},
+        status.HTTP_400_BAD_REQUEST: {"description": "Episode preprocessing not completed"},
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "Internal server error"},
+    },
+)
+def apply_audio_edits(episode_id: str, session: SessionDep) -> list[str]:
+    """Apply audio edits based on the episode's editor_state"""
+    episode = _get_episode_or_404(episode_id, session)
+    _check_preprocessed_or_400(episode)
+
+    episode_dir = app_dir / "episodes" / episode_id
+    source_dir = episode_dir / "preprocessed"
+    edited_dir = episode_dir / "edited"
+    edited_dir.mkdir(exist_ok=True, parents=True)
+
+    # Copy all preprocessed audio files to edited directory
+    for file_path in source_dir.glob("*.wav"):
+        shutil.copy(file_path, edited_dir)
+
+    # Get all audio files
+    edited_files = sorted(list(edited_dir.glob("*.wav")))
+    if not edited_files:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No audio files found")
+
+    combine_audio_path = episode_dir / "combined.wav"
+    combine_audio_files(edited_files, combine_audio_path)
+
+    return [file_path.name for file_path in edited_dir.glob("*.wav")]
+
+
+@audio_editing_router.get(
+    "/episodes/{episode_id}/edited-audio",
+)
+def get_edited_audio_files(episode_id: str, session: SessionDep) -> FileResponse:
+    """Get the final edited audio file"""
+    _get_episode_or_404(episode_id, session)
+
+    # Check combined audio file exists
+    episode_dir = app_dir / "episodes" / episode_id
+    edited_combine_path = episode_dir / "combined.wav"
+    if not edited_combine_path.exists():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Edit audio is not completed")
+
+    return FileResponse(path=edited_combine_path, media_type="audio/wav", filename=edited_combine_path.name)
+
+
+#####################################
 # MARK: Post-processing endpoints
 #####################################
 postprocess_router = APIRouter(tags=["postprocess"])
@@ -255,7 +313,6 @@ def _check_postprocessed_or_400(episode: Episode) -> None:
         )
 
 
-# TODO: It should process after edited audio files
 @postprocess_router.post(
     "/episodes/{episode_id}/postprocess",
     status_code=status.HTTP_202_ACCEPTED,
@@ -305,7 +362,7 @@ def run_postprocessing(job_id: int, episode_uuid: str, db: Session) -> None:
 
     try:
         episode_dir = app_dir / "episodes" / episode_uuid
-        source_dir = episode_dir / "preprocessed"  # TODO: It should process after edited audio files
+        source_dir = episode_dir / "edited"
         output_dir = episode_dir / "postprocessed"
         output_dir.mkdir(exist_ok=True, parents=True)
 
@@ -368,4 +425,5 @@ def get_postprocessed_audio(episode_id: str, session: SessionDep) -> FileRespons
 #####################################
 v1_router.include_router(episodes_router)
 v1_router.include_router(preprocess_resources_router)
+v1_router.include_router(audio_editing_router)
 v1_router.include_router(postprocess_router)
