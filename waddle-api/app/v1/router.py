@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Annotated, List
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from platformdirs import user_data_dir
 from sqlmodel import Session, select
 from waddle.processor import preprocess_multi_files
@@ -149,3 +150,82 @@ def delete_episode(episode_id: str, session: SessionDep) -> None:
         shutil.rmtree(episode_dir)
 
     return None  # Using 204 No Content for successful deletion
+
+
+# Helper function to check if preprocessing is completed
+def check_preprocessing_completed(episode: Episode) -> None:
+    """Check if preprocessing is completed for an episode"""
+    if episode.preprocess_status != JobStatus.completed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Episode preprocessing is not completed. Current status: {episode.preprocess_status}"
+        )
+
+
+@v1_router.get("/episodes/{episode_id}/audios", response_model=List[str])
+def get_preprocessed_audio_files(episode_id: str, session: SessionDep) -> List[str]:
+    """Retrieves all preprocessed audio filenames for a specific episode"""
+    episode = session.get(Episode, episode_id)
+    if not episode:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
+    check_preprocessing_completed(episode)
+
+    preprocessed_dir = app_dir / "episodes" / episode_id / "preprocessed"
+    if not preprocessed_dir.exists():
+        return []
+
+    audio_files: List[str] = []
+    for file_path in preprocessed_dir.glob("*.wav"):
+        audio_files.append(file_path.name)
+    return audio_files
+
+
+@v1_router.get(
+    "/episodes/{episode_id}/audio/{file_name}",
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Audio file or episode not found"},
+        status.HTTP_400_BAD_REQUEST: {"description": "Episode preprocessing not completed"},
+    },
+)
+def get_audio_file(episode_id: str, file_name: str, session: SessionDep) -> FileResponse:
+    """Retrieves a specific audio file"""
+    episode = session.get(Episode, episode_id)
+    if not episode:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
+    check_preprocessing_completed(episode)
+
+    audio_file_path = app_dir / "episodes" / episode_id / "preprocessed" / file_name
+    if not audio_file_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audio file not found")
+
+    return FileResponse(path=audio_file_path, media_type="audio/wav", filename=audio_file_path.name)
+
+
+@v1_router.get(
+    "/episodes/{episode_id}/srt",
+    response_model=str,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "SRT file or episode not found"},
+        status.HTTP_400_BAD_REQUEST: {"description": "Episode preprocessing not completed"},
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "Error reading SRT file"},
+    },
+)
+def get_transcription(episode_id: str, session: SessionDep) -> str:
+    """Retrieves SRT transcription file content as a string"""
+    episode = session.get(Episode, episode_id)
+    if not episode:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
+    check_preprocessing_completed(episode)
+
+    preprocessed_dir = app_dir / "episodes" / episode_id / "preprocessed"
+    srt_files = list(preprocessed_dir.glob("*.srt"))
+    if not srt_files:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SRT file not found")
+
+    srt_file_path = srt_files[0]
+
+    try:
+        with open(srt_file_path, "r", encoding="utf-8") as file:
+            srt_content = file.read()
+        return srt_content
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error reading SRT file: {str(e)}") from e
