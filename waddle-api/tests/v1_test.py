@@ -98,9 +98,13 @@ def test_create_episode_with_wavs(session: Session, client: TestClient, monkeypa
 
         # Check the response
         assert response.status_code == 201
-        data = response.json()
+
+        response_data = client.get("/v1/episodes").json()
+        assert len(response_data) == 1
+
+        data = response_data[0]
         assert data["title"] == "Test Episode with WAVs"
-        assert data["preprocessed"] is False
+        assert data["preprocess_status"] == JobStatus.completed
 
         # Verify that source files were saved
         episode_dir = Path(temp_dir) / "episodes" / data["uuid"]

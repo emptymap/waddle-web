@@ -41,7 +41,7 @@ def read_episodes(
 async def create_episode(
     files: list[UploadFile], db: SessionDep, background_tasks: BackgroundTasks, title: Annotated[str, Form(description="Episode title")] = ""
 ) -> Episode:
-    new_episode = Episode(title=title)
+    new_episode = Episode(title=title, preprocess_status=JobStatus.pending)
 
     storage_path = app_dir / "episodes" / new_episode.uuid
     storage_path.mkdir(parents=True, exist_ok=True)
@@ -75,18 +75,24 @@ def run_preprocessing(job_id: int, episode_uuid: str, db: Session) -> None:
     episode = db.get(Episode, episode_uuid)
     if not episode:
         return
+    episode.preprocess_status = JobStatus.processing
     job.status = JobStatus.processing
     db.commit()
+    db.refresh(episode)
+    db.refresh(job)
     try:
         episode_dir = app_dir / "episodes" / episode_uuid
         preprocess_multi_files(reference=None, source_dir=episode_dir / "source", output_dir=episode_dir / "preprocessed", transcribe=True)
-        episode.preprocessed = True
+        episode.preprocess_status = JobStatus.completed
         job.status = JobStatus.completed
     except Exception as e:
+        episode.preprocess_status = JobStatus.failed
         job.status = JobStatus.failed
         job.error_message = str(e)
     finally:
         db.commit()
+        db.refresh(episode)
+        db.refresh(job)
         db.close()
 
 
@@ -107,12 +113,6 @@ def update_episode(episode_id: str, update_data: UpdateEpisodeRequest, session: 
         episode.title = update_data.title
     if update_data.editor_state is not None:
         episode.editor_state = update_data.editor_state
-    if update_data.preprocessed is not None:
-        episode.preprocessed = update_data.preprocessed
-    if update_data.postprocessed is not None:
-        episode.postprocessed = update_data.postprocessed
-    if update_data.metadata_generated is not None:
-        episode.metadata_generated = update_data.metadata_generated
 
     session.add(episode)
     session.commit()

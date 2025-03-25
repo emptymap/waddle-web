@@ -6,13 +6,23 @@ from nanoid import generate
 from sqlmodel import Field, SQLModel
 
 
+class JobStatus(str, Enum):
+    """Enum for processing job status"""
+
+    init = "init"
+    pending = "pending"
+    processing = "processing"
+    completed = "completed"
+    failed = "failed"
+
+
 class Episode(SQLModel, table=True):
     """Main episode model containing metadata and relationships to related resources"""
 
     uuid: str = Field(default_factory=generate, primary_key=True)
-    preprocessed: bool = Field(default=False)
-    postprocessed: bool = Field(default=False)
-    metadata_generated: bool = Field(default=False)
+    preprocess_status: JobStatus = Field(default=JobStatus.init)
+    postprocess_status: JobStatus = Field(default=JobStatus.init)
+    metadata_generation_status: JobStatus = Field(default=JobStatus.init)
     editor_state: str = Field(default="")
     title: str = Field(default="")
     created_at: datetime = Field(default_factory=datetime.now)
@@ -30,9 +40,6 @@ class UpdateEpisodeRequest(SQLModel):
 
     title: Optional[str] = None
     editor_state: Optional[str] = None
-    preprocessed: Optional[bool] = None
-    postprocessed: Optional[bool] = None
-    metadata_generated: Optional[bool] = None
 
 
 class JobType(str, Enum):
@@ -42,15 +49,6 @@ class JobType(str, Enum):
     postprocess = "postprocess"
     metadata = "metadata"
     audio_edit = "audio_edit"
-
-
-class JobStatus(str, Enum):
-    """Enum for processing job status"""
-
-    pending = "pending"
-    processing = "processing"
-    completed = "completed"
-    failed = "failed"
 
 
 class ProcessingJob(SQLModel, table=True):
