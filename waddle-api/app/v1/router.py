@@ -97,6 +97,13 @@ def run_preprocessing(job_id: int, episode_uuid: str, db: Session) -> None:
         db.close()
 
 
+def _get_episode_or_404(episode_id: str, session: Session) -> Episode:
+    episode = session.get(Episode, episode_id)
+    if not episode:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
+    return episode
+
+
 @v1_router.get(
     "/episodes/{episode_id}",
     response_model=Episode,
@@ -106,10 +113,7 @@ def run_preprocessing(job_id: int, episode_uuid: str, db: Session) -> None:
 )
 def get_episode(episode_id: str, session: SessionDep) -> Episode:
     """Get a specific episode by ID"""
-    episode = session.get(Episode, episode_id)
-    if not episode:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
-    return episode
+    return _get_episode_or_404(episode_id, session)
 
 
 @v1_router.patch(
@@ -121,9 +125,7 @@ def get_episode(episode_id: str, session: SessionDep) -> Episode:
 )
 def update_episode(episode_id: str, update_data: UpdateEpisodeRequest, session: SessionDep) -> Episode:
     """Update an existing episode"""
-    episode = session.get(Episode, episode_id)
-    if not episode:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
+    episode = _get_episode_or_404(episode_id, session)
 
     if update_data.title is not None:
         episode.title = update_data.title
@@ -139,9 +141,7 @@ def update_episode(episode_id: str, update_data: UpdateEpisodeRequest, session: 
 @v1_router.delete("/episodes/{episode_id}", status_code=status.HTTP_204_NO_CONTENT, responses={status.HTTP_404_NOT_FOUND: {"description": "Episode not found"}})
 def delete_episode(episode_id: str, session: SessionDep) -> None:
     """Delete an episode"""
-    episode = session.get(Episode, episode_id)
-    if not episode:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
+    episode = _get_episode_or_404(episode_id, session)
     session.delete(episode)
     session.commit()
 
@@ -152,8 +152,7 @@ def delete_episode(episode_id: str, session: SessionDep) -> None:
     return None  # Using 204 No Content for successful deletion
 
 
-# Helper function to check if preprocessing is completed
-def check_preprocessing_completed(episode: Episode) -> None:
+def _check_preprocessing_or_400(episode: Episode) -> None:
     """Check if preprocessing is completed for an episode"""
     if episode.preprocess_status != JobStatus.completed:
         raise HTTPException(
@@ -164,10 +163,8 @@ def check_preprocessing_completed(episode: Episode) -> None:
 @v1_router.get("/episodes/{episode_id}/audios", response_model=List[str])
 def get_preprocessed_audio_files(episode_id: str, session: SessionDep) -> List[str]:
     """Retrieves all preprocessed audio filenames for a specific episode"""
-    episode = session.get(Episode, episode_id)
-    if not episode:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
-    check_preprocessing_completed(episode)
+    episode = _get_episode_or_404(episode_id, session)
+    _check_preprocessing_or_400(episode)
 
     preprocessed_dir = app_dir / "episodes" / episode_id / "preprocessed"
     if not preprocessed_dir.exists():
@@ -188,10 +185,8 @@ def get_preprocessed_audio_files(episode_id: str, session: SessionDep) -> List[s
 )
 def get_audio_file(episode_id: str, file_name: str, session: SessionDep) -> FileResponse:
     """Retrieves a specific audio file"""
-    episode = session.get(Episode, episode_id)
-    if not episode:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
-    check_preprocessing_completed(episode)
+    episode = _get_episode_or_404(episode_id, session)
+    _check_preprocessing_or_400(episode)
 
     audio_file_path = app_dir / "episodes" / episode_id / "preprocessed" / file_name
     if not audio_file_path.exists():
@@ -211,10 +206,8 @@ def get_audio_file(episode_id: str, file_name: str, session: SessionDep) -> File
 )
 def get_transcription(episode_id: str, session: SessionDep) -> str:
     """Retrieves SRT transcription file content as a string"""
-    episode = session.get(Episode, episode_id)
-    if not episode:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
-    check_preprocessing_completed(episode)
+    episode = _get_episode_or_404(episode_id, session)
+    _check_preprocessing_or_400(episode)
 
     preprocessed_dir = app_dir / "episodes" / episode_id / "preprocessed"
     srt_files = list(preprocessed_dir.glob("*.srt"))
