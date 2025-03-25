@@ -187,6 +187,18 @@ function Index() {
 		},
 	];
 
+	// Add this helper function before the return statement in your component
+	const isEpisodeProcessing = (episode: Episode): boolean => {
+		return (
+			episode.preprocess_status === JobStatus.PROCESSING ||
+			episode.postprocess_status === JobStatus.PROCESSING ||
+			episode.metadata_generation_status === JobStatus.PROCESSING ||
+			episode.preprocess_status === JobStatus.PENDING ||
+			episode.postprocess_status === JobStatus.PENDING ||
+			episode.metadata_generation_status === JobStatus.PENDING
+		);
+	};
+
 	return (
 		<Box p={4}>
 			<Flex justifyContent="space-between" alignItems="center" mb={4}>
@@ -278,7 +290,11 @@ function Index() {
 								<Flex justifyContent="flex-end">
 									{episode.uuid && (
 										<RouterLink to={`/episodes/${episode.uuid}`}>
-											<Button size="sm" mr={2}>
+											<Button
+												size="sm"
+												mr={2}
+												disabled={isEpisodeProcessing(episode)}
+											>
 												<Edit size={14} /> Edit
 											</Button>
 										</RouterLink>
@@ -289,6 +305,7 @@ function Index() {
 											episode.uuid &&
 											handleDeleteClick(episode.uuid, episode.title)
 										}
+										disabled={isEpisodeProcessing(episode)}
 									>
 										<Trash2 size={14} /> Delete
 									</Button>
