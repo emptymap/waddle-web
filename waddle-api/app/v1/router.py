@@ -19,8 +19,13 @@ app_dir = Path(user_data_dir(APP_NAME, APP_AUTHOR))
 v1_router = APIRouter(tags=["v1"])
 
 
-# Episode CRUD endpoints
-@v1_router.get("/episodes/", response_model=List[Episode])
+#####################################
+# MARK: Episode CRUD operations
+#####################################
+episodes_router = APIRouter(tags=["episodes"])
+
+
+@episodes_router.get("/episodes/", response_model=List[Episode])
 def read_episodes(
     session: SessionDep,
     offset: Annotated[int, Query(ge=0, description="Offset the number of episodes returned")] = 0,
@@ -31,7 +36,7 @@ def read_episodes(
     return list(episodes)
 
 
-@v1_router.post(
+@episodes_router.post(
     "/episodes/",
     status_code=status.HTTP_201_CREATED,
     responses={
@@ -104,7 +109,7 @@ def _get_episode_or_404(episode_id: str, session: Session) -> Episode:
     return episode
 
 
-@v1_router.get(
+@episodes_router.get(
     "/episodes/{episode_id}",
     response_model=Episode,
     responses={
@@ -116,7 +121,7 @@ def get_episode(episode_id: str, session: SessionDep) -> Episode:
     return _get_episode_or_404(episode_id, session)
 
 
-@v1_router.patch(
+@episodes_router.patch(
     "/episodes/{episode_id}",
     response_model=Episode,
     responses={
@@ -138,7 +143,9 @@ def update_episode(episode_id: str, update_data: UpdateEpisodeRequest, session: 
     return episode
 
 
-@v1_router.delete("/episodes/{episode_id}", status_code=status.HTTP_204_NO_CONTENT, responses={status.HTTP_404_NOT_FOUND: {"description": "Episode not found"}})
+@episodes_router.delete(
+    "/episodes/{episode_id}", status_code=status.HTTP_204_NO_CONTENT, responses={status.HTTP_404_NOT_FOUND: {"description": "Episode not found"}}
+)
 def delete_episode(episode_id: str, session: SessionDep) -> None:
     """Delete an episode"""
     episode = _get_episode_or_404(episode_id, session)
@@ -160,7 +167,13 @@ def _check_preprocessing_or_400(episode: Episode) -> None:
         )
 
 
-@v1_router.get("/episodes/{episode_id}/audios", response_model=List[str])
+#####################################
+# MARK: Preprocessed resources: audio files and SRT transcription
+#####################################
+preprocess_resources_router = APIRouter(tags=["preprocessed_resources"])
+
+
+@preprocess_resources_router.get("/episodes/{episode_id}/audios", response_model=List[str])
 def get_preprocessed_audio_files(episode_id: str, session: SessionDep) -> List[str]:
     """Retrieves all preprocessed audio filenames for a specific episode"""
     episode = _get_episode_or_404(episode_id, session)
@@ -176,7 +189,7 @@ def get_preprocessed_audio_files(episode_id: str, session: SessionDep) -> List[s
     return audio_files
 
 
-@v1_router.get(
+@preprocess_resources_router.get(
     "/episodes/{episode_id}/audio/{file_name}",
     responses={
         status.HTTP_404_NOT_FOUND: {"description": "Audio file or episode not found"},
@@ -195,7 +208,7 @@ def get_audio_file(episode_id: str, file_name: str, session: SessionDep) -> File
     return FileResponse(path=audio_file_path, media_type="audio/wav", filename=audio_file_path.name)
 
 
-@v1_router.get(
+@preprocess_resources_router.get(
     "/episodes/{episode_id}/srt",
     response_model=str,
     responses={
@@ -222,3 +235,10 @@ def get_transcription(episode_id: str, session: SessionDep) -> str:
         return srt_content
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error reading SRT file: {str(e)}") from e
+
+
+#####################################
+# MARK: Include routers
+#####################################
+v1_router.include_router(episodes_router)
+v1_router.include_router(preprocess_resources_router)
