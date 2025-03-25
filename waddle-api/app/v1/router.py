@@ -165,7 +165,7 @@ def delete_episode(episode_id: str, session: SessionDep) -> None:
 preprocess_resources_router = APIRouter(tags=["preprocessed_resources"])
 
 
-def _check_preprocessing_or_400(episode: Episode) -> None:
+def _check_preprocessed_or_400(episode: Episode) -> None:
     """Check if preprocessing is completed for an episode"""
     if episode.preprocess_status != JobStatus.completed:
         raise HTTPException(
@@ -177,7 +177,7 @@ def _check_preprocessing_or_400(episode: Episode) -> None:
 def get_preprocessed_audio_files(episode_id: str, session: SessionDep) -> List[str]:
     """Retrieves all preprocessed audio filenames for a specific episode"""
     episode = _get_episode_or_404(episode_id, session)
-    _check_preprocessing_or_400(episode)
+    _check_preprocessed_or_400(episode)
 
     preprocessed_dir = app_dir / "episodes" / episode_id / "preprocessed"
     if not preprocessed_dir.exists():
@@ -199,7 +199,7 @@ def get_preprocessed_audio_files(episode_id: str, session: SessionDep) -> List[s
 def get_audio_file(episode_id: str, file_name: str, session: SessionDep) -> FileResponse:
     """Retrieves a specific audio file"""
     episode = _get_episode_or_404(episode_id, session)
-    _check_preprocessing_or_400(episode)
+    _check_preprocessed_or_400(episode)
 
     # Validate and sanitize file_name to prevent directory traversal
     if ".." in file_name or "/" in file_name or "\\" in file_name:
@@ -224,7 +224,7 @@ def get_audio_file(episode_id: str, file_name: str, session: SessionDep) -> File
 def get_transcription(episode_id: str, session: SessionDep) -> str:
     """Retrieves SRT transcription file content as a string"""
     episode = _get_episode_or_404(episode_id, session)
-    _check_preprocessing_or_400(episode)
+    _check_preprocessed_or_400(episode)
 
     preprocessed_dir = app_dir / "episodes" / episode_id / "preprocessed"
     srt_files = list(preprocessed_dir.glob("*.srt"))
