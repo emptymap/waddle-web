@@ -55,8 +55,14 @@ function Index() {
 			if (response.error) {
 				throw new Error("Failed to fetch episodes");
 			}
-			setEpisodes(response.data || []);
-			console.log(response.data);
+
+			const sortedEpisodes = [...(response.data || [])].sort((a, b) => {
+				const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+				const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+				return dateB - dateA;
+			});
+
+			setEpisodes(sortedEpisodes);
 		} catch (err) {
 			setError(
 				err instanceof Error ? err.message : "An unknown error occurred",
@@ -123,10 +129,13 @@ function Index() {
 
 	const formatDate = (dateString?: string) => {
 		if (!dateString) return "Unknown date";
-		return new Date(dateString).toLocaleDateString(undefined, {
+		return new Date(dateString).toLocaleString(undefined, {
 			year: "numeric",
 			month: "short",
 			day: "numeric",
+			hour: "2-digit",
+			minute: "2-digit",
+			second: "2-digit",
 		});
 	};
 
