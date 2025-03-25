@@ -11,7 +11,7 @@ from waddle.processor import postprocess_multi_files, preprocess_multi_files
 
 from app.db import get_session
 from app.defaults import APP_AUTHOR, APP_NAME
-from app.models import Episode, JobStatus, JobType, ProcessingJob, UpdateEpisodeRequest
+from app.models import AnnotatedSrtContent, Episode, JobStatus, JobType, ProcessingJob, UpdateEpisodeRequest
 
 SessionDep = Annotated[Session, Depends(get_session)]
 app_dir = Path(user_data_dir(APP_NAME, APP_AUTHOR))
@@ -421,9 +421,92 @@ def get_postprocessed_audio(episode_id: str, session: SessionDep) -> FileRespons
 
 
 #####################################
+# MARK: Transcription Management endpoints
+#####################################
+transcription_router = APIRouter(tags=["transcription"])
+
+
+def _get_combined_srt_or_404(episode_id: str) -> Path:
+    """Get the combined SRT file for an episode"""
+    episode_dir = app_dir / "episodes" / episode_id
+    postprocessed_dir = episode_dir / "postprocessed"
+    srt_files = list(postprocessed_dir.glob("*.srt"))
+    if not srt_files:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SRT file not found")
+
+    combined_srt = None
+    for srt_file in srt_files:
+        srt_prefix = srt_file.stem
+        if "-" not in srt_prefix:
+            combined_srt = srt_file
+            break
+    if combined_srt is None:
+        combined_srt = srt_files[0]
+
+    return combined_srt
+
+
+@transcription_router.get(
+    "/episodes/{episode_id}/annotated-srt",
+    response_model=AnnotatedSrtContent,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Episode or annotated SRT file not found"},
+        status.HTTP_400_BAD_REQUEST: {"description": "Episode preprocessing not completed"},
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "Error reading annotated SRT file"},
+    },
+)
+def get_annotated_srt(episode_id: str, session: SessionDep) -> AnnotatedSrtContent:
+    """Retrieves annotated SRT with speaker information"""
+    episode = _get_episode_or_404(episode_id, session)
+    _check_postprocessed_or_400(episode)
+
+    preprocessed_dir = app_dir / "episodes" / episode_id / "postprocessed"
+    srt_files = list(preprocessed_dir.glob("*.srt"))
+    if not srt_files:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Annotated SRT file not found")
+    combined_srt = _get_combined_srt_or_404(episode_id)
+
+    try:
+        with open(combined_srt, "r", encoding="utf-8") as file:
+            srt_content = file.read()
+        return AnnotatedSrtContent(content=srt_content)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error reading annotated SRT file: {str(e)}") from e
+
+
+@transcription_router.put(
+    "/episodes/{episode_id}/annotated-srt",
+    response_model=AnnotatedSrtContent,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Episode not found"},
+        status.HTTP_400_BAD_REQUEST: {"description": "Episode preprocessing not completed"},
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "Error writing annotated SRT file"},
+    },
+)
+def update_annotated_srt(episode_id: str, annotated_srt: AnnotatedSrtContent, session: SessionDep) -> AnnotatedSrtContent:
+    """Updates annotated SRT with speaker information"""
+    episode = _get_episode_or_404(episode_id, session)
+    _check_postprocessed_or_400(episode)
+
+    preprocessed_dir = app_dir / "episodes" / episode_id / "postprocessed"
+    srt_files = list(preprocessed_dir.glob("*.srt"))
+    if not srt_files:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Annotated SRT file not found")
+    combined_srt = _get_combined_srt_or_404(episode_id)
+
+    try:
+        with open(combined_srt, "w", encoding="utf-8") as file:
+            file.write(annotated_srt.content)
+        return annotated_srt
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error writing annotated SRT file: {str(e)}") from e
+
+
+#####################################
 # MARK: Include routers
 #####################################
 v1_router.include_router(episodes_router)
 v1_router.include_router(preprocess_resources_router)
 v1_router.include_router(audio_editing_router)
 v1_router.include_router(postprocess_router)
+v1_router.include_router(transcription_router)

@@ -55,3 +55,9 @@ class ProcessingJob(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
     error_message: Optional[str] = None
+
+
+class AnnotatedSrtContent(SQLModel):
+    """Model for annotated SRT content with speaker information"""
+
+    content: str
