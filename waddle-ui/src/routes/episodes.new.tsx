@@ -15,6 +15,7 @@ import {
 import { toaster } from "../components/ui/toaster";
 import { createEpisodeV1EpisodesPost } from "../client";
 import { useState, useRef } from "react";
+import { ArrowLeft, Upload, X, Trash2, Save, PlusCircle } from "lucide-react";
 
 export const Route = createFileRoute("/episodes/new")({
 	component: NewEpisode,
@@ -127,7 +128,9 @@ function NewEpisode() {
 		<Box p={4}>
 			<Flex justifyContent="space-between" alignItems="center" mb={4}>
 				<Heading size="lg">Create New Episode</Heading>
-				<Button onClick={() => navigate({ to: "/" })}>Back to Episodes</Button>
+				<Button onClick={() => navigate({ to: "/" })}>
+					<ArrowLeft size={16} /> Back to Episodes
+				</Button>
 			</Flex>
 
 			<Card.Root variant="outline" p={4}>
@@ -172,9 +175,15 @@ function NewEpisode() {
 									width="full"
 									height="40px"
 								>
-									{audioFiles.length > 0
-										? "Add More Audio Files"
-										: "Upload Audio Files"}
+									{audioFiles.length > 0 ? (
+										<>
+											<PlusCircle size={16} /> Add More Audio Files
+										</>
+									) : (
+										<>
+											<Upload size={16} /> Upload Audio Files
+										</>
+									)}
 								</Button>
 
 								{audioFiles.length > 0 ? (
@@ -213,7 +222,7 @@ function NewEpisode() {
 															colorScheme="red"
 															onClick={() => removeFile(index)}
 														>
-															Remove
+															<Trash2 size={14} /> Remove
 														</Button>
 													</Flex>
 												</Box>
@@ -236,7 +245,7 @@ function NewEpisode() {
 
 						<Flex justifyContent="flex-end" mt={4}>
 							<Button mr={3} onClick={() => navigate({ to: "/" })}>
-								Cancel
+								<X size={16} /> Cancel
 							</Button>
 							<Button
 								colorScheme="blue"
@@ -244,7 +253,7 @@ function NewEpisode() {
 								type="submit"
 								disabled={audioFiles.length === 0}
 							>
-								Create Episode
+								<Save size={16} /> Create Episode
 							</Button>
 						</Flex>
 					</VStack>

@@ -5,16 +5,26 @@ import {
 	Heading,
 	Text,
 	VStack,
-	HStack,
 	Spinner,
 	Card,
-	Badge,
 	Flex,
 	Button,
 	Alert,
 	Dialog,
+	Steps,
 } from "@chakra-ui/react";
 import { toaster } from "../components/ui/toaster";
+import {
+	Check,
+	AudioLines,
+	Captions,
+	FilePenLine,
+	PlusCircle,
+	Edit,
+	Trash2,
+	X,
+	AlertTriangle,
+} from "lucide-react";
 import {
 	type Episode,
 	readEpisodesV1EpisodesGet,
@@ -111,12 +121,41 @@ function Index() {
 		});
 	};
 
+	// Calculate the current step for each episode
+	const getEpisodeStep = (episode: Episode) => {
+		if (episode.metadata_generated) return 3; // All steps complete
+		if (episode.postprocessed) return 2; // Completed preprocessing and postprocessing
+		if (episode.preprocessed) return 1; // Only preprocessing complete
+		return 0; // No steps complete
+	};
+
+	// Define the processing steps
+	const processingSteps = [
+		{
+			title: "Preprocessing",
+			description: "Initial data processing",
+			icon: <AudioLines />,
+		},
+		{
+			title: "Postprocessing",
+			description: "Secondary data processing",
+			icon: <Captions />,
+		},
+		{
+			title: "Metadata",
+			description: "Metadata generation",
+			icon: <FilePenLine />,
+		},
+	];
+
 	return (
 		<Box p={4}>
 			<Flex justifyContent="space-between" alignItems="center" mb={4}>
 				<Heading size="lg">Episodes</Heading>
 				<RouterLink to="/episodes/new">
-					<Button colorScheme="blue">New Episode</Button>
+					<Button>
+						<PlusCircle size={16} /> New Episode
+					</Button>
 				</RouterLink>
 			</Flex>
 
@@ -126,7 +165,9 @@ function Index() {
 				</Flex>
 			) : error ? (
 				<Alert.Root status="error">
-					<Alert.Indicator />
+					<Alert.Indicator>
+						<AlertTriangle />
+					</Alert.Indicator>
 					<Alert.Content>
 						<Alert.Description>{error}</Alert.Description>
 					</Alert.Content>
@@ -148,25 +189,28 @@ function Index() {
 								</Flex>
 							</Card.Header>
 							<Card.Body>
-								<HStack gap={2}>
-									<Badge
-										colorScheme={episode.preprocessed ? "green" : "yellow"}
-									>
-										{episode.preprocessed ? "Preprocessed" : "Preprocessing"}
-									</Badge>
-									<Badge
-										colorScheme={episode.postprocessed ? "green" : "yellow"}
-									>
-										{episode.postprocessed ? "Postprocessed" : "Postprocessing"}
-									</Badge>
-									<Badge
-										colorScheme={episode.metadata_generated ? "green" : "gray"}
-									>
-										{episode.metadata_generated
-											? "Metadata Generated"
-											: "No Metadata"}
-									</Badge>
-								</HStack>
+								{/* Steps component to replace badges */}
+								<Steps.Root
+									step={getEpisodeStep(episode)}
+									count={processingSteps.length}
+									size="sm"
+									variant="solid"
+								>
+									<Steps.List>
+										{processingSteps.map((step, index) => (
+											<Steps.Item key={step.title} index={index} gap={2}>
+												<Steps.Indicator>
+													<Steps.Status
+														incomplete={step.icon}
+														complete={<Check />}
+													/>
+												</Steps.Indicator>
+												<Steps.Title>{step.title}</Steps.Title>
+												<Steps.Separator />
+											</Steps.Item>
+										))}
+									</Steps.List>
+								</Steps.Root>
 							</Card.Body>
 							<Card.Footer>
 								<Flex justifyContent="flex-end">
@@ -175,20 +219,19 @@ function Index() {
 											to="/episodes/$episodeId"
 											params={{ episodeId: episode.uuid }}
 										>
-											<Button size="sm" colorScheme="blue" mr={2}>
-												Edit
+											<Button size="sm" mr={2}>
+												<Edit size={14} /> Edit
 											</Button>
 										</RouterLink>
 									)}
 									<Button
 										size="sm"
-										colorScheme="red"
 										onClick={() =>
 											episode.uuid &&
 											handleDeleteClick(episode.uuid, episode.title)
 										}
 									>
-										Delete
+										<Trash2 size={14} /> Delete
 									</Button>
 								</Flex>
 							</Card.Footer>
@@ -228,17 +271,17 @@ function Index() {
 								variant="outline"
 								mr={3}
 								onClick={() => setIsDialogOpen(false)}
-								isDisabled={isDeleting}
+								loading={isDeleting}
 							>
-								Cancel
+								<X size={16} /> Cancel
 							</Button>
 							<Button
-								colorScheme="red"
+								colorPalette="red"
 								onClick={confirmDelete}
-								isLoading={isDeleting}
+								loading={isDeleting}
 								loadingText="Deleting"
 							>
-								Delete
+								<Trash2 size={16} /> Delete
 							</Button>
 						</Dialog.Footer>
 					</Dialog.Content>
