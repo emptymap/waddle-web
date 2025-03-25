@@ -96,6 +96,21 @@ def run_preprocessing(job_id: int, episode_uuid: str, db: Session) -> None:
         db.close()
 
 
+@v1_router.get(
+    "/episodes/{episode_id}",
+    response_model=Episode,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Episode not found"},
+    },
+)
+def get_episode(episode_id: str, session: SessionDep) -> Episode:
+    """Get a specific episode by ID"""
+    episode = session.get(Episode, episode_id)
+    if not episode:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
+    return episode
+
+
 @v1_router.patch(
     "/episodes/{episode_id}",
     response_model=Episode,
