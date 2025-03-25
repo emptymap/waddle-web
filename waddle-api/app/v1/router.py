@@ -78,6 +78,8 @@ def run_preprocessing(job_id: int, episode_uuid: str, db: Session) -> None:
     episode.preprocess_status = JobStatus.processing
     job.status = JobStatus.processing
     db.commit()
+    db.refresh(episode)
+    db.refresh(job)
     try:
         episode_dir = app_dir / "episodes" / episode_uuid
         preprocess_multi_files(reference=None, source_dir=episode_dir / "source", output_dir=episode_dir / "preprocessed", transcribe=True)
@@ -89,6 +91,8 @@ def run_preprocessing(job_id: int, episode_uuid: str, db: Session) -> None:
         job.error_message = str(e)
     finally:
         db.commit()
+        db.refresh(episode)
+        db.refresh(job)
         db.close()
 
 
