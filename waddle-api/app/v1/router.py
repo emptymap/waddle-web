@@ -6,7 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Qu
 from fastapi.responses import FileResponse
 from platformdirs import user_data_dir
 from sqlmodel import Session, select
-from waddle.processor import preprocess_multi_files
+from waddle.processor import postprocess_multi_files, preprocess_multi_files
 
 from app.db import get_session
 from app.defaults import APP_AUTHOR, APP_NAME
@@ -242,7 +242,130 @@ def get_transcription(episode_id: str, session: SessionDep) -> str:
 
 
 #####################################
+# MARK: Post-processing endpoints
+#####################################
+postprocess_router = APIRouter(tags=["postprocess"])
+
+
+def _check_postprocessed_or_400(episode: Episode) -> None:
+    """Check if post-processing is completed for an episode"""
+    if episode.postprocess_status != JobStatus.completed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Episode post-processing is not completed. Current status: {episode.postprocess_status}"
+        )
+
+
+# TODO: It should process after edited audio files
+@postprocess_router.post(
+    "/episodes/{episode_id}/postprocess",
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Episode not found"},
+        status.HTTP_400_BAD_REQUEST: {"description": "Episode preprocessing not completed"},
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "Internal server error"},
+    },
+)
+def initiate_postprocess(episode_id: str, background_tasks: BackgroundTasks, session: SessionDep) -> Episode:
+    """Initiate post-processing for an episode using its current editor state"""
+    episode = _get_episode_or_404(episode_id, session)
+    _check_preprocessed_or_400(episode)
+
+    # Create a new processing job for post-processing
+    job = ProcessingJob(episode_id=episode.uuid, type=JobType.postprocess, status=JobStatus.pending)
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+
+    # Start the background task
+    background_tasks.add_task(run_postprocessing, job_id=job.id, episode_uuid=episode_id, db=session)
+
+    episode.postprocess_status = JobStatus.pending
+    session.add(episode)
+    session.commit()
+    session.refresh(episode)
+
+    return episode
+
+
+def run_postprocessing(job_id: int, episode_uuid: str, db: Session) -> None:
+    """Background task to run post-processing"""
+    job = db.get(ProcessingJob, job_id)
+    if not job:
+        return
+
+    episode = db.get(Episode, episode_uuid)
+    if not episode:
+        return
+
+    episode.postprocess_status = JobStatus.processing
+    job.status = JobStatus.processing
+    db.commit()
+    db.refresh(episode)
+    db.refresh(job)
+
+    try:
+        episode_dir = app_dir / "episodes" / episode_uuid
+        source_dir = episode_dir / "preprocessed"  # TODO: It should process after edited audio files
+        output_dir = episode_dir / "postprocessed"
+        output_dir.mkdir(exist_ok=True, parents=True)
+
+        postprocess_multi_files(source_dir=source_dir, output_dir=output_dir)
+
+        episode.postprocess_status = JobStatus.completed
+        job.status = JobStatus.completed
+    except Exception as e:
+        episode.postprocess_status = JobStatus.failed
+        job.status = JobStatus.failed
+        job.error_message = str(e)
+    finally:
+        db.commit()
+        db.refresh(episode)
+        db.refresh(job)
+        db.close()
+
+
+@postprocess_router.get(
+    "/episodes/{episode_id}/postprocessed-audio",
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Post-processed audio not found or episode not found"},
+        status.HTTP_400_BAD_REQUEST: {"description": "Post-processing not completed"},
+    },
+)
+def get_postprocessed_audio(episode_id: str, session: SessionDep) -> FileResponse:
+    """Get the final post-processed audio file"""
+    episode = _get_episode_or_404(episode_id, session)
+    _check_postprocessed_or_400(episode)
+
+    # Check if post-processing is completed
+    if episode.postprocess_status != JobStatus.completed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Episode post-processing is not completed. Current status: {episode.postprocess_status}"
+        )
+
+    postprocessed_dir = app_dir / "episodes" / episode_id / "postprocessed"
+    if not postprocessed_dir.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post-processed directory not found")
+
+    # Look for audio files (assuming .wav format)
+    audio_files = list(postprocessed_dir.glob("*.wav"))
+    if not audio_files:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post-processed audio file not found")
+
+    final_audio = None
+    for audio_file in audio_files:
+        audio_prefix = audio_file.stem
+        if "-" not in audio_prefix:
+            final_audio = audio_file
+            break
+    if final_audio is None:
+        final_audio = audio_files[0]
+
+    return FileResponse(path=final_audio, media_type="audio/wav", filename=final_audio.name)
+
+
+#####################################
 # MARK: Include routers
 #####################################
 v1_router.include_router(episodes_router)
 v1_router.include_router(preprocess_resources_router)
+v1_router.include_router(postprocess_router)
