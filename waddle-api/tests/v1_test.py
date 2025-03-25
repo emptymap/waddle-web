@@ -41,6 +41,11 @@ def client_fixture(session: Session) -> Generator[TestClient]:
     app.dependency_overrides.clear()
 
 
+#####################################
+# MARK: Episode CRUD operations
+#####################################
+
+
 def test_read_episodes_empty(client: TestClient) -> None:
     """Test reading episodes when the database is empty."""
     response = client.get("/v1/episodes/")
@@ -133,6 +138,21 @@ def test_create_episode_with_wavs(session: Session, client: TestClient, monkeypa
         # Optional: Check for transcription files if your preprocessor generates them
         transcript_files = list(preprocessed_dir.glob("*.srt"))
         assert len(transcript_files) > 0
+
+
+def test_read_episode(session: Session, client: TestClient) -> None:
+    """Test reading a single episode."""
+    # Create a test episode
+    episode = Episode(title="Test Episode")
+    session.add(episode)
+    session.commit()
+
+    # Read the episode
+    response = client.get(f"/v1/episodes/{episode.uuid}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["title"] == episode.title
 
 
 def test_update_episode(session: Session, client: TestClient) -> None:
