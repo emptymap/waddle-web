@@ -159,18 +159,18 @@ def delete_episode(episode_id: str, session: SessionDep) -> None:
     return None  # Using 204 No Content for successful deletion
 
 
+#####################################
+# MARK: Preprocessed resources: audio files and SRT transcription
+#####################################
+preprocess_resources_router = APIRouter(tags=["preprocessed_resources"])
+
+
 def _check_preprocessing_or_400(episode: Episode) -> None:
     """Check if preprocessing is completed for an episode"""
     if episode.preprocess_status != JobStatus.completed:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=f"Episode preprocessing is not completed. Current status: {episode.preprocess_status}"
         )
-
-
-#####################################
-# MARK: Preprocessed resources: audio files and SRT transcription
-#####################################
-preprocess_resources_router = APIRouter(tags=["preprocessed_resources"])
 
 
 @preprocess_resources_router.get("/episodes/{episode_id}/audios", response_model=List[str])
