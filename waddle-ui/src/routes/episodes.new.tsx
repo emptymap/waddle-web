@@ -34,7 +34,7 @@ function NewEpisode() {
 	const {
 		handleSubmit,
 		register,
-		formState: { errors, isSubmitting },
+		formState: { isSubmitting },
 	} = useForm<EpisodeFormData>();
 
 	const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -136,12 +136,16 @@ function NewEpisode() {
 			<Card.Root variant="outline" p={4}>
 				<form onSubmit={handleSubmit(onSubmit)}>
 					<VStack gap={4} align="stretch">
-						<Field.Root invalid={!!errors.title}>
+						<Field.Root>
 							<Field.Label>
 								Episode Title
 								<Field.RequiredIndicator />
 							</Field.Label>
-							<Input id="title" placeholder="Enter episode title" />
+							<Input
+								id="title"
+								placeholder="Enter episode title"
+								{...register("title")}
+							/>
 						</Field.Root>
 
 						<Field.Root invalid={audioFiles.length === 0}>
