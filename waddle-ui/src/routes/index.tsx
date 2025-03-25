@@ -12,6 +12,7 @@ import {
 	Alert,
 	Dialog,
 	Steps,
+	ProgressCircle,
 } from "@chakra-ui/react";
 import { toaster } from "../components/ui/toaster";
 import {
@@ -24,6 +25,7 @@ import {
 	Trash2,
 	X,
 	AlertTriangle,
+	Clock,
 } from "lucide-react";
 import {
 	type Episode,
@@ -147,22 +149,41 @@ function Index() {
 		return 0; // No steps complete
 	};
 
+	// Get status icon based on job status
+	const getStatusIcon = (status?: JobStatus) => {
+		switch (status) {
+			case JobStatus.COMPLETED:
+				return <Check />;
+			case JobStatus.PENDING:
+				return <Clock />;
+			case JobStatus.FAILED:
+				return <X />;
+			case JobStatus.INIT:
+				return null; // Use default icon for INIT status
+			default:
+				return null; // Use default icon for any other status
+		}
+	};
+
 	// Define the processing steps
 	const processingSteps = [
 		{
-			title: "Preprocessing",
+			title: "Preprocess",
 			description: "Initial data processing",
 			icon: <AudioLines />,
+			getStatus: (episode: Episode) => episode.preprocess_status,
 		},
 		{
-			title: "Postprocessing",
-			description: "Secondary data processing",
+			title: "Postprocess",
+			description: "Transcript",
 			icon: <Captions />,
+			getStatus: (episode: Episode) => episode.postprocess_status,
 		},
 		{
 			title: "Metadata",
 			description: "Metadata generation",
 			icon: <FilePenLine />,
+			getStatus: (episode: Episode) => episode.metadata_generation_status,
 		},
 	];
 
@@ -207,7 +228,6 @@ function Index() {
 								</Flex>
 							</Card.Header>
 							<Card.Body>
-								{/* Steps component to replace badges */}
 								<Steps.Root
 									step={getEpisodeStep(episode)}
 									count={processingSteps.length}
@@ -215,18 +235,42 @@ function Index() {
 									variant="solid"
 								>
 									<Steps.List>
-										{processingSteps.map((step, index) => (
-											<Steps.Item key={step.title} index={index} gap={2}>
-												<Steps.Indicator>
-													<Steps.Status
-														incomplete={step.icon}
-														complete={<Check />}
-													/>
-												</Steps.Indicator>
-												<Steps.Title>{step.title}</Steps.Title>
-												<Steps.Separator />
-											</Steps.Item>
-										))}
+										{processingSteps.map((step, index) => {
+											const status = step.getStatus(episode);
+											return (
+												<Steps.Item key={step.title} index={index} gap={2}>
+													<Steps.Indicator>
+														<Steps.Status
+															incomplete={
+																status === JobStatus.PROCESSING ? (
+																	<ProgressCircle.Root value={null} size="sm">
+																		<ProgressCircle.Circle>
+																			<ProgressCircle.Track />
+																			<ProgressCircle.Range />
+																		</ProgressCircle.Circle>
+																	</ProgressCircle.Root>
+																) : (
+																	getStatusIcon(status) || step.icon
+																)
+															}
+															complete={<Check />}
+														/>
+													</Steps.Indicator>
+													<Steps.Title>
+														{step.title}{" "}
+														{status &&
+														status !== JobStatus.INIT &&
+														status !== JobStatus.PROCESSING &&
+														status !== JobStatus.COMPLETED ? (
+															<Text as="span" fontSize="xs">
+																({status})
+															</Text>
+														) : null}
+													</Steps.Title>
+													<Steps.Separator />
+												</Steps.Item>
+											);
+										})}
 									</Steps.List>
 								</Steps.Root>
 							</Card.Body>
