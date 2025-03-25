@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 license = { text = "MIT"}
 authors = [
-  {name = "emptymap", email = "youremail@example.aaa"}
+    {name = "emptymap", email = "youremail@example.aaa"}
 ]
 dependencies = [
     "fastapi[standard]>=0.115.11",
