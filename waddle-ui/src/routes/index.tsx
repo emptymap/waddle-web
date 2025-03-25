@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import {
 	type Episode,
+	JobStatus,
 	readEpisodesV1EpisodesGet,
 	deleteEpisodeV1EpisodesEpisodeIdDelete,
 } from "../client";
@@ -123,9 +124,9 @@ function Index() {
 
 	// Calculate the current step for each episode
 	const getEpisodeStep = (episode: Episode) => {
-		if (episode.metadata_generated) return 3; // All steps complete
-		if (episode.postprocessed) return 2; // Completed preprocessing and postprocessing
-		if (episode.preprocessed) return 1; // Only preprocessing complete
+		if (episode.metadata_generation_status === JobStatus.COMPLETED) return 3;
+		if (episode.postprocess_status === JobStatus.COMPLETED) return 2;
+		if (episode.preprocess_status === JobStatus.COMPLETED) return 1;
 		return 0; // No steps complete
 	};
 
