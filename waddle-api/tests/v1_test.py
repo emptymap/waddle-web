@@ -6,7 +6,7 @@ from typing import BinaryIO, Generator, List, Tuple
 
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
-from fastapi import FastAPI
+from fastapi import FastAPI, status
 from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine, select
 from sqlmodel.pool import StaticPool
@@ -123,6 +123,29 @@ def _add_postprocessed(episode_dir: Path) -> None:
         f.write("2\n00:00:05,500 --> 00:00:10,000\nFor testing purposes only.\n\n")
 
 
+def _add_metadata(episode_dir: Path) -> None:
+    """
+    Add metadata files to the episode directory.
+    """
+    metadata_dir = episode_dir / "metadata"
+    metadata_dir.mkdir(exist_ok=True)
+
+    # Add chapter file
+    chapter_file = metadata_dir / "test.chapters.txt"
+    with open(chapter_file, "w") as f:
+        f.write("- (00:06) Test1\n- (00:12) Test2")
+
+    # Add show notes file
+    show_notes_file = metadata_dir / "test.show_notes.md"
+    with open(show_notes_file, "w") as f:
+        f.write("# Test Episode Show Notes\n\n")
+        f.write("## Introduction\n")
+        f.write("- Welcoming the guest\n")
+        f.write("- Overview of the topics\n\n")
+        f.write("## Links\n")
+        f.write("- [Example Link](https://example.com)\n")
+
+
 def _add_episode_to_db(
     session: Session,
     episode_id: str,
@@ -217,6 +240,37 @@ def postprocessed_client_fixture(session: Session, monkeypatch: MonkeyPatch) -> 
             episode_id=episode_id,
             preprocess_status=JobStatus.completed,
             postprocess_status=JobStatus.completed,
+        )
+
+        client = _configure_test_client(app, session)
+        yield client
+        app.dependency_overrides.clear()
+
+
+@pytest.fixture(name="metadata_client")
+def metadata_client_fixture(session: Session, monkeypatch: MonkeyPatch) -> Generator[TestClient]:
+    """
+    Create a test client with a pre-populated episode that has completed postprocessing
+    and is ready for metadata generation.
+    """
+    with TemporaryDirectory() as temp_dir:
+        temp_dir_path = Path(temp_dir)
+        monkeypatch.setattr("app.v1.router.app_dir", temp_dir_path)
+
+        episode_id = "metadata-test-episode"
+        episode_dir = _get_episode_dir(temp_dir_path, episode_id)
+        _add_source(episode_dir)
+        _add_preprocessed(episode_dir)
+        _add_edited(episode_dir)
+        _add_postprocessed(episode_dir)
+        _add_metadata(episode_dir)
+
+        _add_episode_to_db(
+            session,
+            episode_id=episode_id,
+            preprocess_status=JobStatus.completed,
+            postprocess_status=JobStatus.completed,
+            metadata_generation_status=JobStatus.completed,
         )
 
         client = _configure_test_client(app, session)
@@ -574,6 +628,70 @@ def test_transcription_management_preprocessing_incomplete(session: Session, pos
     assert response.status_code == 400
 
 
+#####################################
+# MARK: Metadata Generation Tests
+#####################################
+
+
+def test_get_chapter_info(metadata_client: TestClient) -> None:
+    """Test retrieving chapter information."""
+    episodes = metadata_client.get("/v1/episodes/").json()
+    episode_id = episodes[0]["uuid"]
+
+    response = metadata_client.get(f"/v1/episodes/{episode_id}/chapters")
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.text) > 0
+
+    response = metadata_client.get(f"/v1/episodes/{episode_id}/show-notes")
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.text) > 0
+
+
+def test_get_metadata_errors(metadata_client: TestClient, session: Session) -> None:
+    """Test error responses for getting metadata."""
+    response = metadata_client.get("/v1/episodes/nonexistent-id/chapters")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    response = metadata_client.get("/v1/episodes/nonexistent-id/show-notes")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    episode = Episode(
+        title="Incomplete Metadata", preprocess_status=JobStatus.completed, postprocess_status=JobStatus.completed, metadata_generation_status=JobStatus.pending
+    )
+    session.add(episode)
+    session.commit()
+
+    response = metadata_client.get(f"/v1/episodes/{episode.uuid}/chapters")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    response = metadata_client.get(f"/v1/episodes/{episode.uuid}/show-notes")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+def test_missing_files(metadata_client: TestClient, monkeypatch: MonkeyPatch) -> None:
+    """Test responses when files are missing."""
+    episodes = metadata_client.get("/v1/episodes/").json()
+    episode_id = episodes[0]["uuid"]
+
+    with TemporaryDirectory() as temp_dir:
+        temp_dir_path = Path(temp_dir)
+        monkeypatch.setattr("app.v1.router.app_dir", temp_dir_path)
+
+        # Create episode directory with empty metadata directory
+        episode_dir = temp_dir_path / "episodes" / episode_id
+        metadata_dir = episode_dir / "metadata"
+        metadata_dir.mkdir(parents=True, exist_ok=True)
+
+        # Test missing files
+        response = metadata_client.get(f"/v1/episodes/{episode_id}/chapters")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert "Chapter file not found" in response.json()["detail"]
+
+        response = metadata_client.get(f"/v1/episodes/{episode_id}/show-notes")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert "Show notes file not found" in response.json()["detail"]
+
+
 ##################################
 # MARK: Episode creation tests
 ##################################
@@ -664,5 +782,17 @@ def test_process_all(session: Session, client: TestClient, monkeypatch: MonkeyPa
 
         # Check transcription management
         response = client.get(f"/v1/episodes/{data['uuid']}/annotated-srt")
+        assert response.status_code == 200
+        assert len(response.content) > 0
+
+        # Metadata generation
+        response = client.post(f"/v1/episodes/{data['uuid']}/generate-metadata")
+        assert response.status_code == 202
+
+        response = client.get(f"/v1/episodes/{data['uuid']}/chapters")
+        assert response.status_code == 200
+        assert len(response.content) > 0
+
+        response = client.get(f"/v1/episodes/{data['uuid']}/show-notes")
         assert response.status_code == 200
         assert len(response.content) > 0
