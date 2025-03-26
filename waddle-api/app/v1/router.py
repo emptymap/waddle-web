@@ -6,6 +6,7 @@ from typing import Annotated, List
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
 from platformdirs import user_data_dir
+from sqlalchemy import asc, desc, func
 from sqlmodel import Session, select
 from waddle.metadata import generate_metadata
 from waddle.processing.combine import combine_audio_files
@@ -13,7 +14,7 @@ from waddle.processor import postprocess_multi_files, preprocess_multi_files
 
 from app.db import get_session
 from app.defaults import APP_AUTHOR, APP_NAME
-from app.models import AnnotatedSrtContent, Episode, JobStatus, JobType, ProcessingJob, UpdateEpisodeRequest
+from app.models import AnnotatedSrtContent, Episode, EpisodeFilterParams, EpisodeSortBy, JobStatus, JobType, ProcessingJob, SortOrder, UpdateEpisodeRequest
 
 SessionDep = Annotated[Session, Depends(get_session)]
 app_dir = Path(user_data_dir(APP_NAME, APP_AUTHOR))
@@ -26,14 +27,38 @@ v1_router = APIRouter(prefix="/v1")
 episodes_router = APIRouter(tags=["v1_episodes"])
 
 
-@episodes_router.get("/episodes/", response_model=List[Episode])
-def read_episodes(
-    session: SessionDep,
-    offset: Annotated[int, Query(ge=0, description="Offset the number of episodes returned")] = 0,
-    limit: Annotated[int, Query(le=100, description="Limit the number of episodes returned")] = 100,
-) -> List[Episode]:
-    """Read all episodes"""
-    episodes = session.exec(select(Episode).offset(offset).limit(limit)).all()
+@episodes_router.get("/episodes/", response_model=List[Episode], responses={status.HTTP_400_BAD_REQUEST: {"description": "Invalid sort_by parameter"}})
+def read_episodes(session: SessionDep, filter_params: Annotated[EpisodeFilterParams, Query()]) -> List[Episode]:
+    """Read episodes with sorting and filtering capabilities."""
+    if filter_params.sort_by not in EpisodeSortBy.__members__:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid sort_by parameter")
+
+    query = select(Episode)
+
+    # Apply filters
+    if filter_params.title:
+        query = query.where(func.lower(Episode.title).like(f"%{filter_params.title.lower()}%"))
+    if filter_params.preprocess_status:
+        query = query.where(Episode.preprocess_status == filter_params.preprocess_status)
+    if filter_params.edit_status:
+        query = query.where(Episode.edit_status == filter_params.edit_status)
+    if filter_params.postprocess_status:
+        query = query.where(Episode.postprocess_status == filter_params.postprocess_status)
+    if filter_params.metadata_generation_status:
+        query = query.where(Episode.metadata_generation_status == filter_params.metadata_generation_status)
+    if filter_params.export_status:
+        query = query.where(Episode.export_status == filter_params.export_status)
+
+    # Apply sorting
+    sort_column = getattr(Episode, filter_params.sort_by)
+    if filter_params.sort_order == SortOrder.desc:
+        query = query.order_by(desc(sort_column))
+    else:
+        query = query.order_by(asc(sort_column))
+
+    query = query.offset(filter_params.offset).limit(filter_params.limit)
+
+    episodes = session.exec(query).all()
     return list(episodes)
 
 

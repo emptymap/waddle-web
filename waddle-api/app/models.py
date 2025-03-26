@@ -31,6 +31,31 @@ class Episode(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.now)
 
 
+class EpisodeSortBy(str, Enum):
+    created_at = "created_at"
+    updated_at = "updated_at"
+
+
+class SortOrder(str, Enum):
+    asc = "asc"
+    desc = "desc"
+
+
+class EpisodeFilterParams(SQLModel):
+    """Model for filtering episodes"""
+
+    offset: int = Field(0, ge=0, description="Offset the number of episodes returned")
+    limit: int = Field(100, gt=0, le=100, description="Limit the number of episodes returned")
+    sort_by: str = Field(EpisodeSortBy.created_at, description="Sort episodes by (created_at or updated_at)")
+    sort_order: SortOrder = Field(SortOrder.desc, description="Sort order (asc or desc)")
+    title: Optional[str] = Field(None, description="Filter by title (partial match)")
+    preprocess_status: Optional[JobStatus] = Field(None, description="Filter by preprocess status")
+    edit_status: Optional[JobStatus] = Field(None, description="Filter by edit status")
+    postprocess_status: Optional[JobStatus] = Field(None, description="Filter by postprocess status")
+    metadata_generation_status: Optional[JobStatus] = Field(None, description="Filter by metadata generation status")
+    export_status: Optional[JobStatus] = Field(None, description="Filter by export status")
+
+
 class UpdateEpisodeRequest(SQLModel):
     """Model for updating an existing episode"""
 
