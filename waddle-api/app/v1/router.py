@@ -64,7 +64,7 @@ def read_episodes(session: SessionDep, filter_params: Annotated[EpisodeFilterPar
 
 @episodes_router.post(
     "/episodes/",
-    status_code=status.HTTP_201_CREATED,
+    status_code=status.HTTP_202_ACCEPTED,
     responses={
         status.HTTP_400_BAD_REQUEST: {"description": "No file name provided"},
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "Internal server error"},
@@ -264,7 +264,7 @@ edit_audio_router = APIRouter(tags=["v1_edit_audio"])
 
 @edit_audio_router.post(
     "/episodes/{episode_id}/edit-audio",
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_202_ACCEPTED,
     responses={
         status.HTTP_404_NOT_FOUND: {"description": "Episode not found"},
         status.HTTP_400_BAD_REQUEST: {"description": "Episode preprocessing not completed"},
@@ -510,7 +510,6 @@ metadata_router = APIRouter(tags=["v1_metadata"])
 
 @metadata_router.post(
     "/episodes/{episode_id}/metadata",
-    status_code=status.HTTP_202_ACCEPTED,
     responses={
         status.HTTP_404_NOT_FOUND: {"description": "Episode not found"},
         status.HTTP_400_BAD_REQUEST: {"description": "Episode preprocessing not completed"},
