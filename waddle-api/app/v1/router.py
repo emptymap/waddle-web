@@ -48,6 +48,7 @@ def read_episodes(
 async def create_episode(
     files: list[UploadFile], session: SessionDep, background_tasks: BackgroundTasks, title: Annotated[str, Form(description="Episode title")] = ""
 ) -> Episode:
+    """Create a new episode and start preprocessing"""
     new_episode = Episode(title=title, preprocess_status=JobStatus.pending)
     session.add(new_episode)
     session.commit()
@@ -66,7 +67,6 @@ async def create_episode(
             with open(file_path, "wb") as f:
                 content = await file.read()
                 f.write(content)
-        session.add(new_episode)
         job = ProcessingJob(episode_id=new_episode.uuid, type=JobType.preprocess, status=JobStatus.pending)
         session.add(job)
         session.commit()
@@ -77,16 +77,18 @@ async def create_episode(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e
 
 
-# Background preprocessing task
 def run_preprocessing(job_id: int, episode_uuid: str, session: SessionDep) -> None:
+    """Background task to run preprocessing"""
     job = session.get(ProcessingJob, job_id)
     if not job:
         return
+    job.status = JobStatus.processing
+
     episode = session.get(Episode, episode_uuid)
     if not episode:
         return
     episode.preprocess_status = JobStatus.processing
-    job.status = JobStatus.processing
+
     session.commit()
     session.refresh(episode)
     session.refresh(job)
@@ -740,24 +742,29 @@ def _check_status_or_400(episode: Episode, status_field: str) -> None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Episode {status_field} is not completed. Current status: {target_status}")
 
 
+def _get_combined_file(files: List[Path]) -> Path:
+    """Get the combined file from a list of files"""
+    combined_file = None
+    for file in files:
+        file_prefix = file.stem
+        if "-" not in file_prefix:
+            combined_file = file
+            break
+    if combined_file is None:
+        combined_file = files[0]
+
+    return combined_file
+
+
 def _get_post_combined_audio_or_404(episode_id: str) -> Path:
     """Get the combined audio file for an episode"""
     episode_dir = app_dir / "episodes" / episode_id
-    target_dir = episode_dir / "postprocessed"
-    target_files = list(target_dir.glob("*.wav"))
-    if not target_files:
+    audio_dir = episode_dir / "postprocessed"
+    audio_files = list(audio_dir.glob("*.wav"))
+    if not audio_files:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Edited audio file not found")
 
-    combined_audio = None
-    for audio_file in target_files:
-        audio_prefix = audio_file.stem
-        if "-" not in audio_prefix:
-            combined_audio = audio_file
-            break
-    if combined_audio is None:
-        combined_audio = target_files[0]
-
-    return combined_audio
+    return _get_combined_file(audio_files)
 
 
 def _get_combined_srt_or_404(episode_id: str) -> Path:
@@ -768,16 +775,7 @@ def _get_combined_srt_or_404(episode_id: str) -> Path:
     if not srt_files:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SRT file not found")
 
-    combined_srt = None
-    for srt_file in srt_files:
-        srt_prefix = srt_file.stem
-        if "-" not in srt_prefix:
-            combined_srt = srt_file
-            break
-    if combined_srt is None:
-        combined_srt = srt_files[0]
-
-    return combined_srt
+    return _get_combined_file(srt_files)
 
 
 #####################################

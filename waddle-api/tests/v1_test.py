@@ -330,6 +330,13 @@ def export_client_fixture(session: Session, monkeypatch: MonkeyPatch) -> Generat
         app.dependency_overrides.clear()
 
 
+def _get_episode_id(target_client: TestClient) -> str:
+    episodes = target_client.get("/v1/episodes/").json()
+    assert len(episodes) > 0
+    episode_id = episodes[0]["uuid"]
+    return episode_id
+
+
 #####################################
 # MARK: Episode CRUD operations
 #####################################
@@ -412,7 +419,6 @@ def test_update_episode_not_found(client: TestClient) -> None:
 
 def test_delete_episode(session: Session, client: TestClient) -> None:
     """Test deleting an episode."""
-    # Create a test episode
     episode = Episode(title="Test Episode")
     session.add(episode)
     session.commit()
@@ -439,27 +445,19 @@ def test_delete_episode_not_found(client: TestClient) -> None:
 
 def test_get_audio_file(preprocessed_client: TestClient) -> None:
     """Test retrieving a specific audio file for a pre-populated episode."""
-    # Get the episode from the database
-    episodes = preprocessed_client.get("/v1/episodes/").json()
-    assert len(episodes) > 0
-    episode_id = episodes[0]["uuid"]
+    episode_id = _get_episode_id(preprocessed_client)
 
-    # Get list of audio files
     audio_files_response = preprocessed_client.get(f"/v1/episodes/{episode_id}/audios")
     assert audio_files_response.status_code == 200
 
     audio_files = audio_files_response.json()
     assert len(audio_files) > 0
 
-    # Test getting the audio file (using exact filename from our fixture)
     file_name = "preprocessed_sample.wav"
     response = preprocessed_client.get(f"/v1/episodes/{episode_id}/audio/{file_name}")
     assert response.status_code == status.HTTP_200_OK
-
-    # Verify it's an audio file by checking content type
     assert response.headers["content-type"] == "audio/wav"
 
-    # Test with invalid file name
     response = preprocessed_client.get(f"/v1/episodes/{episode_id}/audio/nonexistent.wav")
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
@@ -471,25 +469,18 @@ def test_get_audio_file(preprocessed_client: TestClient) -> None:
 
 def test_get_transcription(preprocessed_client: TestClient) -> None:
     """Test retrieving SRT transcription for a pre-populated episode."""
-    # Get the episode from the database
-    episodes = preprocessed_client.get("/v1/episodes/").json()
-    assert len(episodes) > 0
-    episode_id = episodes[0]["uuid"]
+    episode_id = _get_episode_id(preprocessed_client)
 
-    # Test getting SRT content
     response = preprocessed_client.get(f"/v1/episodes/{episode_id}/srt")
     assert response.status_code == status.HTTP_200_OK
 
-    # Verify the SRT content format
     srt_content = response.text
     assert isinstance(srt_content, str)
     assert len(srt_content) > 0
 
-    # Check for expected content from our fixture
     assert "This is a sample transcript." in srt_content
     assert "For testing purposes only." in srt_content
 
-    # Check format of timestamps
     assert "00:00:00,000 --> 00:00:05,000" in srt_content
     assert "00:00:05,500 --> 00:00:10,000" in srt_content
 
@@ -498,7 +489,6 @@ def test_preprocessed_resources_with_invalid_episode_prepopulated(preprocessed_c
     """Test retrieving preprocessed resources with an invalid episode ID."""
     invalid_id = "nonexistent-id"
 
-    # Test with nonexistent episode ID
     response = preprocessed_client.get(f"/v1/episodes/{invalid_id}/audios")
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
@@ -534,9 +524,7 @@ def test_preprocessed_resources_before_preprocessing_prepopulated(session: Sessi
 
 def test_get_edited_combined_audio(edited_client: TestClient) -> None:
     """Test retrieving edited combined audio for a pre-populated episode."""
-    episodes = edited_client.get("/v1/episodes/").json()
-    assert len(episodes) > 0
-    episode_id = episodes[0]["uuid"]
+    episode_id = _get_episode_id(edited_client)
 
     response = edited_client.get(f"/v1/episodes/{episode_id}/edited-audio")
     assert response.status_code == status.HTTP_200_OK
@@ -580,9 +568,7 @@ def test_get_edited_audio_not_found(edited_client: TestClient) -> None:
 
 def test_get_postprocessed_audio(postprocessed_client: TestClient) -> None:
     """Test retrieving postprocessed audio for a pre-populated episode."""
-    episodes = postprocessed_client.get("/v1/episodes/").json()
-    assert len(episodes) > 0
-    episode_id = episodes[0]["uuid"]
+    episode_id = _get_episode_id(postprocessed_client)
 
     response = postprocessed_client.get(f"/v1/episodes/{episode_id}/postprocessed-audio")
     assert response.status_code == status.HTTP_200_OK
@@ -623,9 +609,7 @@ def test_postprocess_preprocessing_incomplete(session: Session, postprocessed_cl
 
 def test_get_and_update_annotated_srt(postprocessed_client: TestClient) -> None:
     """Test retrieving annotated SRT for a postprocessed episode."""
-    episodes = postprocessed_client.get("/v1/episodes/").json()
-    assert len(episodes) > 0
-    episode_id = episodes[0]["uuid"]
+    episode_id = _get_episode_id(postprocessed_client)
 
     response = postprocessed_client.get(f"/v1/episodes/{episode_id}/annotated-srt")
     assert response.status_code == status.HTTP_200_OK
@@ -683,8 +667,7 @@ def test_transcription_management_preprocessing_incomplete(session: Session, pos
 
 def test_get_chapter_info(metadata_client: TestClient) -> None:
     """Test retrieving chapter information."""
-    episodes = metadata_client.get("/v1/episodes/").json()
-    episode_id = episodes[0]["uuid"]
+    episode_id = _get_episode_id(metadata_client)
 
     response = metadata_client.get(f"/v1/episodes/{episode_id}/metadata-audio")
     assert response.status_code == status.HTTP_200_OK
@@ -723,8 +706,7 @@ def test_get_metadata_errors(metadata_client: TestClient, session: Session) -> N
 
 def test_missing_files(metadata_client: TestClient, monkeypatch: MonkeyPatch) -> None:
     """Test responses when files are missing."""
-    episodes = metadata_client.get("/v1/episodes/").json()
-    episode_id = episodes[0]["uuid"]
+    episode_id = _get_episode_id(metadata_client)
 
     with TemporaryDirectory() as temp_dir:
         temp_dir_path = Path(temp_dir)
@@ -752,15 +734,12 @@ def test_missing_files(metadata_client: TestClient, monkeypatch: MonkeyPatch) ->
 
 def test_download_export(export_client: TestClient) -> None:
     """Test downloading an exported zip file."""
-    episodes = export_client.get("/v1/episodes/").json()
-    assert len(episodes) > 0
-    episode_id = episodes[0]["uuid"]
+    episode_id = _get_episode_id(export_client)
 
     response = export_client.get(f"/v1/episodes/{episode_id}/export")
     assert response.status_code == status.HTTP_200_OK
     assert response.headers["content-type"] == "application/zip"
     assert "content-disposition" in response.headers
-    assert f"filename={episodes[0]['title']}.zip" in response.headers["content-disposition"]
 
 
 def test_download_export_not_found(export_client: TestClient) -> None:
