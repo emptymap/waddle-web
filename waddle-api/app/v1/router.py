@@ -182,7 +182,6 @@ def update_episode(episode_id: str, update_data: UpdateEpisodeRequest, session: 
     if update_data.editor_state is not None:
         episode.editor_state = update_data.editor_state
 
-    session.add(episode)
     session.commit()
     session.refresh(episode)
     return episode
@@ -300,14 +299,12 @@ def initiate_edit_audio(episode_id: str, background_tasks: BackgroundTasks, sess
     session.add(job)
 
     episode.edit_status = JobStatus.pending
-    session.add(episode)
 
     session.commit()
     session.refresh(job)
     session.refresh(episode)
 
     background_tasks.add_task(run_editing, job_id=job.id, episode_uuid=episode_id, session=session)
-
     return episode
 
 
@@ -395,16 +392,14 @@ def initiate_postprocess(episode_id: str, background_tasks: BackgroundTasks, ses
 
     job = ProcessingJob(episode_id=episode.uuid, type=JobType.postprocess, status=JobStatus.pending)
     session.add(job)
-    session.commit()
-    session.refresh(job)
-
-    background_tasks.add_task(run_postprocessing, job_id=job.id, episode_uuid=episode_id, session=session)
 
     episode.postprocess_status = JobStatus.pending
-    session.add(episode)
+
     session.commit()
+    session.refresh(job)
     session.refresh(episode)
 
+    background_tasks.add_task(run_postprocessing, job_id=job.id, episode_uuid=episode_id, session=session)
     return episode
 
 
@@ -675,16 +670,14 @@ def initiate_export(episode_id: str, background_tasks: BackgroundTasks, session:
 
     job = ProcessingJob(episode_id=episode.uuid, type=JobType.export, status=JobStatus.pending)
     session.add(job)
-    session.commit()
-    session.refresh(job)
-
-    background_tasks.add_task(run_export, job_id=job.id, episode_uuid=episode_id, session=session)
 
     episode.export_status = JobStatus.pending
-    session.add(episode)
+
     session.commit()
+    session.refresh(job)
     session.refresh(episode)
 
+    background_tasks.add_task(run_export, job_id=job.id, episode_uuid=episode_id, session=session)
     return episode
 
 

@@ -348,16 +348,184 @@ def test_read_episodes(session: Session, client: TestClient) -> None:
     assert data[0]["title"] == episode_1.title
 
 
-def test_read_episode(session: Session, client: TestClient) -> None:
-    """Test reading a single episode."""
-    episode = Episode(title="Test Episode")
-    session.add(episode)
+def test_episodes_sorting(session: Session, client: TestClient) -> None:
+    episode_1 = Episode(title="Episode 1")
+    episode_2 = Episode(title="Episode 2")
+    session.add(episode_1)
+    session.add(episode_2)
     session.commit()
 
-    response = client.get(f"/v1/episodes/{episode.uuid}")
-    assert response.status_code == status.HTTP_200_OK
+    # Test ascending order
+    response = client.get("/v1/episodes/?sort_by=created_at&sort_order=asc")
     data = response.json()
-    assert data["title"] == episode.title
+    assert data[0]["title"] == episode_1.title
+    assert data[1]["title"] == episode_2.title
+
+    # Test descending order (default)
+    response = client.get("/v1/episodes/?sort_by=created_at")
+    data = response.json()
+    assert data[0]["title"] == episode_2.title
+    assert data[1]["title"] == episode_1.title
+
+    # Test sorting by updated_at
+    response = client.patch(f"/v1/episodes/{episode_1.uuid}", json={"editor_state": "update state"})
+    assert response.status_code == status.HTTP_200_OK
+    response = client.get("/v1/episodes/?sort_by=updated_at")
+    data = response.json()
+    assert data[0]["title"] == episode_1.title
+    assert data[1]["title"] == episode_2.title
+
+
+def test_episodes_filter_by_title(session: Session, client: TestClient) -> None:
+    """Test filtering episodes by title."""
+    # Create episodes with different titles
+    episode_1 = Episode(title="Test Episode")
+    episode_2 = Episode(title="Another Episode")
+    episode_3 = Episode(title="test show")
+    session.add(episode_1)
+    session.add(episode_2)
+    session.add(episode_3)
+    session.commit()
+
+    # Test exact match
+    response = client.get("/v1/episodes/?title=Test Episode")
+    data = response.json()
+    assert response.status_code == status.HTTP_200_OK
+    assert len(data) == 1
+    assert data[0]["title"] == episode_1.title
+
+    # Test partial match
+    response = client.get("/v1/episodes/?title=Test")
+    data = response.json()
+    assert response.status_code == status.HTTP_200_OK
+    assert len(data) == 2
+    assert {d["title"] for d in data} == {episode_1.title, episode_3.title}
+
+    # Test case insensitive match
+    response = client.get("/v1/episodes/?title=test")
+    data = response.json()
+    assert response.status_code == status.HTTP_200_OK
+    assert len(data) == 2
+    assert {d["title"] for d in data} == {episode_1.title, episode_3.title}
+
+    # Test no match
+    response = client.get("/v1/episodes/?title=NonExistent")
+    data = response.json()
+    assert response.status_code == status.HTTP_200_OK
+    assert len(data) == 0
+
+
+def test_episodes_filter_by_job_status(session: Session, client: TestClient) -> None:
+    """Test filtering episodes by various job statuses."""
+    # Create episodes with different statuses
+    episode_1 = Episode(
+        title="Episode 1",
+        preprocess_status=JobStatus.completed,
+        edit_status=JobStatus.processing,
+        postprocess_status=JobStatus.pending,
+        metadata_generation_status=JobStatus.failed,
+        export_status=JobStatus.init,
+    )
+    episode_2 = Episode(
+        title="Episode 2",
+        preprocess_status=JobStatus.completed,
+        edit_status=JobStatus.completed,
+        postprocess_status=JobStatus.processing,
+        metadata_generation_status=JobStatus.pending,
+        export_status=JobStatus.completed,
+    )
+    session.add(episode_1)
+    session.add(episode_2)
+    session.commit()
+
+    # Test preprocess_status filter
+    response = client.get("/v1/episodes/?preprocess_status=completed")
+    data = response.json()
+    assert response.status_code == status.HTTP_200_OK
+    assert len(data) == 2
+
+    # Test edit_status filter
+    response = client.get("/v1/episodes/?edit_status=processing")
+    data = response.json()
+    assert response.status_code == status.HTTP_200_OK
+    assert len(data) == 1
+    assert data[0]["title"] == episode_1.title
+
+    # Test postprocess_status filter
+    response = client.get("/v1/episodes/?postprocess_status=pending")
+    data = response.json()
+    assert response.status_code == status.HTTP_200_OK
+    assert len(data) == 1
+    assert data[0]["title"] == episode_1.title
+
+    # Test metadata_generation_status filter
+    response = client.get("/v1/episodes/?metadata_generation_status=failed")
+    data = response.json()
+    assert response.status_code == status.HTTP_200_OK
+    assert len(data) == 1
+    assert data[0]["title"] == episode_1.title
+
+    # Test export_status filter
+    response = client.get("/v1/episodes/?export_status=completed")
+    data = response.json()
+    assert response.status_code == status.HTTP_200_OK
+    assert len(data) == 1
+    assert data[0]["title"] == episode_2.title
+
+    # Test multiple filters (AND condition)
+    response = client.get("/v1/episodes/?preprocess_status=completed&edit_status=completed")
+    data = response.json()
+    assert response.status_code == status.HTTP_200_OK
+    assert len(data) == 1
+    assert data[0]["title"] == episode_2.title
+
+
+def test_episodes_combined_filters_and_sort(session: Session, client: TestClient) -> None:
+    """Test combining multiple filters with sorting."""
+    episode_1 = Episode(title="Alpha Episode", preprocess_status=JobStatus.completed, edit_status=JobStatus.pending)
+    episode_2 = Episode(title="Beta Episode", preprocess_status=JobStatus.completed, edit_status=JobStatus.pending)
+    episode_3 = Episode(title="Alpha Show", preprocess_status=JobStatus.failed, edit_status=JobStatus.pending)
+    session.add(episode_1)
+    session.add(episode_2)
+    session.add(episode_3)
+    session.commit()
+
+    # Update episode_2 to change its updated_at timestamp
+    response = client.patch(f"/v1/episodes/{episode_2.uuid}", json={"title": "Beta Episode Updated"})
+    assert response.status_code == status.HTTP_200_OK
+    episode_2 = response.json()
+
+    # Test filtering by status and sorted by updated_at
+    response = client.get("/v1/episodes/?title=Episode&preprocess_status=completed&sort_by=updated_at&sort_order=desc")
+    data = response.json()
+    assert response.status_code == status.HTTP_200_OK
+    assert len(data) == 2
+    assert data[0]["title"] == episode_2.title
+    assert data[1]["title"] == episode_1.title
+
+    # Test filtering by edit_status, sorted by created_at
+    response = client.get("/v1/episodes/?edit_status=pending&sort_by=created_at&sort_order=asc")
+    data = response.json()
+    assert response.status_code == status.HTTP_200_OK
+    assert len(data) == 3
+    assert data[0]["title"] == episode_1.title
+    assert data[1]["title"] == episode_2.title
+    assert data[2]["title"] == episode_3.title
+
+
+def test_episodes_invalid_params(client: TestClient) -> None:
+    """Test invalid sort_by parameter."""
+    response = client.get("/v1/episodes/?offset=invalid_offset")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    response = client.get("/v1/episodes/?limit=invalid_limit")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    response = client.get("/v1/episodes/?sort_by=invalid_field")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    response = client.get("/v1/episodes/?sort_order=invalid_order")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
 def test_update_episode(session: Session, client: TestClient) -> None:

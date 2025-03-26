@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
@@ -27,8 +27,8 @@ class Episode(SQLModel, table=True):
     export_status: JobStatus = Field(default=JobStatus.init)
     editor_state: str = Field(default="")
     title: str = Field(default="", max_length=100)
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), sa_column_kwargs={"onupdate": lambda: datetime.now(timezone.utc)})
 
 
 class EpisodeSortBy(str, Enum):
