@@ -80,24 +80,36 @@ async def create_episode(
     files: list[UploadFile], session: SessionDep, background_tasks: BackgroundTasks, title: Annotated[str, Form(description="Episode title")] = ""
 ) -> Episode:
     """Create a new episode and start preprocessing"""
-    MAX_TOTAL_SIZE = 500 * 1024 * 1024  # 500MB limit
-    total_size = 0
-
+    VARID_EXTENSIONS = [".wav", ".m4a", ".aifc", ".mp4"]
     for file in files:
-        valid_extensions = [".wav", ".m4a", ".aifc", ".mp4"]
         if not file.filename:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No file name provided")
         file_ext = Path(file.filename).suffix.lower()
-        if file_ext not in valid_extensions:
+        if file_ext not in VARID_EXTENSIONS:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unsupported file type: {file_ext}")
 
-        content = await file.read()
-        total_size += len(content)
-        await file.seek(0)  # Reset file position
+    MAX_TOTAL_SIZE = 500 * 1024 * 1024  # 500MB limit
+    total_size = 0
+    for file in files:
+        # Try to get size from content-length header if available
+        if "content-length" in file.headers:
+            file_size = int(file.headers["content-length"])
+            total_size += file_size
+        else:
+            chunk_size = 1024 * 1024  # 1MB chunks
+            file_size = 0
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+                file_size += len(chunk)
+                total_size += len(chunk)
 
-        # For early exit if total size exceeds limit
-        if total_size > MAX_TOTAL_SIZE:
-            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Total files size too large: 500MB limit")
+                # Early exit if size exceeds limit
+                if total_size > MAX_TOTAL_SIZE:
+                    raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Total files size too large: 500MB limit")
+
+            await file.seek(0)
 
     new_episode = Episode(title=title, preprocess_status=JobStatus.pending)
     session.add(new_episode)
