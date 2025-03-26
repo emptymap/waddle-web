@@ -781,7 +781,11 @@ def run_export(job_id: int, episode_uuid: str, session: SessionDep) -> None:
             metadata_dir = episode_dir / "metadata"
             if metadata_dir.exists():
                 for file_path in metadata_dir.glob("*.*"):
-                    zipf.write(file_path, arcname=f"audio/{file_path.name}")
+                    zipf.write(file_path)
+
+            srt_file = _get_combined_srt_or_404(episode_uuid)
+            if srt_file.exists():
+                zipf.write(srt_file)
 
         episode.export_status = JobStatus.completed
         job.status = JobStatus.completed
