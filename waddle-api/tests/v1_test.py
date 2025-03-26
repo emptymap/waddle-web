@@ -295,7 +295,7 @@ def test_get_audio_file(preprocessed_client: TestClient) -> None:
 
     # Test with potentially malicious file name
     malicious_filename = urllib.parse.quote("../../../../etc/passwd")
-    response = preprocessed_client.get(f"/v1/episodes/prepopulated-episode/audio/{malicious_filename}")
+    response = preprocessed_client.get(f"/v1/episodes/{episode_id}/audio/{malicious_filename}")
     assert response.status_code != 200
 
 
