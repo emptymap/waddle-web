@@ -493,7 +493,7 @@ def test_episodes_combined_filters_and_sort(session: Session, client: TestClient
     # Update episode_2 to change its updated_at timestamp
     response = client.patch(f"/v1/episodes/{episode_2.uuid}", json={"title": "Beta Episode Updated"})
     assert response.status_code == status.HTTP_200_OK
-    episode_2 = response.json()
+    episode_2 = Episode(**response.json())
 
     # Test filtering by status and sorted by updated_at
     response = client.get("/v1/episodes/?title=Episode&preprocess_status=completed&sort_by=updated_at&sort_order=desc")
@@ -516,16 +516,16 @@ def test_episodes_combined_filters_and_sort(session: Session, client: TestClient
 def test_episodes_invalid_params(client: TestClient) -> None:
     """Test invalid sort_by parameter."""
     response = client.get("/v1/episodes/?offset=invalid_offset")
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
     response = client.get("/v1/episodes/?limit=invalid_limit")
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
     response = client.get("/v1/episodes/?sort_by=invalid_field")
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
     response = client.get("/v1/episodes/?sort_order=invalid_order")
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
 def test_update_episode(session: Session, client: TestClient) -> None:

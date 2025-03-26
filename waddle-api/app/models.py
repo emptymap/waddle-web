@@ -59,8 +59,8 @@ class EpisodeFilterParams(SQLModel):
 class UpdateEpisodeRequest(SQLModel):
     """Model for updating an existing episode"""
 
-    title: Optional[str] = None
-    editor_state: Optional[str] = None
+    title: Optional[str] = Field(None, max_length=100)
+    editor_state: Optional[str] = Field(None)
 
 
 class JobType(str, Enum):

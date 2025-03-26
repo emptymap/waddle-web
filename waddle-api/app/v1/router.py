@@ -27,12 +27,17 @@ v1_router = APIRouter(prefix="/v1")
 episodes_router = APIRouter(tags=["v1_episodes"])
 
 
-@episodes_router.get("/episodes/", response_model=List[Episode], responses={status.HTTP_400_BAD_REQUEST: {"description": "Invalid sort_by parameter"}})
+@episodes_router.get(
+    "/episodes/",
+    response_model=List[Episode],
+    responses={
+        status.HTTP_422_UNPROCESSABLE_ENTITY: {"description": "Invalid sort_by parameter"},
+    },
+)
 def read_episodes(session: SessionDep, filter_params: Annotated[EpisodeFilterParams, Query()]) -> List[Episode]:
     """Read episodes with sorting and filtering capabilities."""
     if filter_params.sort_by not in EpisodeSortBy.__members__:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid sort_by parameter")
-
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid sort_by parameter")
     query = select(Episode)
 
     # Apply filters
@@ -229,8 +234,8 @@ def get_preprocessed_audio_files(episode_id: str, session: SessionDep) -> List[s
 @preprocess_resources_router.get(
     "/episodes/{episode_id}/audios/{file_name}",
     responses={
-        status.HTTP_404_NOT_FOUND: {"description": "Audio file or episode not found"},
         status.HTTP_400_BAD_REQUEST: {"description": "Episode preprocessing not completed"},
+        status.HTTP_404_NOT_FOUND: {"description": "Audio file or episode not found"},
     },
 )
 def get_audio_file(episode_id: str, file_name: str, session: SessionDep) -> FileResponse:
@@ -249,8 +254,8 @@ def get_audio_file(episode_id: str, file_name: str, session: SessionDep) -> File
     "/episodes/{episode_id}/srt",
     response_model=str,
     responses={
-        status.HTTP_404_NOT_FOUND: {"description": "SRT file or episode not found"},
         status.HTTP_400_BAD_REQUEST: {"description": "Episode preprocessing not completed"},
+        status.HTTP_404_NOT_FOUND: {"description": "SRT file or episode not found"},
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "Error reading SRT file"},
     },
 )
@@ -285,8 +290,8 @@ edit_audio_router = APIRouter(tags=["v1_edit_audio"])
     "/episodes/{episode_id}/edit-audio",
     status_code=status.HTTP_202_ACCEPTED,
     responses={
-        status.HTTP_404_NOT_FOUND: {"description": "Episode not found"},
         status.HTTP_400_BAD_REQUEST: {"description": "Episode preprocessing not completed"},
+        status.HTTP_404_NOT_FOUND: {"description": "Episode not found"},
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "Internal server error"},
     },
 )
@@ -380,8 +385,8 @@ postprocess_router = APIRouter(tags=["v1_postprocess"])
     "/episodes/{episode_id}/postprocess",
     status_code=status.HTTP_202_ACCEPTED,
     responses={
-        status.HTTP_404_NOT_FOUND: {"description": "Episode not found"},
         status.HTTP_400_BAD_REQUEST: {"description": "Episode preprocessing not completed"},
+        status.HTTP_404_NOT_FOUND: {"description": "Episode not found"},
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "Internal server error"},
     },
 )
@@ -443,8 +448,8 @@ def run_postprocessing(job_id: int, episode_uuid: str, session: SessionDep) -> N
 @postprocess_router.get(
     "/episodes/{episode_id}/postprocessed-audio",
     responses={
-        status.HTTP_404_NOT_FOUND: {"description": "Post-processed audio not found or episode not found"},
         status.HTTP_400_BAD_REQUEST: {"description": "Post-processing not completed"},
+        status.HTTP_404_NOT_FOUND: {"description": "Post-processed audio not found or episode not found"},
     },
 )
 def get_postprocessed_audio(episode_id: str, session: SessionDep) -> FileResponse:
@@ -474,8 +479,8 @@ transcription_router = APIRouter(tags=["v1_transcription"])
     "/episodes/{episode_id}/annotated-srt",
     response_model=AnnotatedSrtContent,
     responses={
-        status.HTTP_404_NOT_FOUND: {"description": "Episode or annotated SRT file not found"},
         status.HTTP_400_BAD_REQUEST: {"description": "Episode preprocessing not completed"},
+        status.HTTP_404_NOT_FOUND: {"description": "Episode or SRT file not found"},
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "Error reading annotated SRT file"},
     },
 )
@@ -497,8 +502,8 @@ def get_annotated_srt(episode_id: str, session: SessionDep) -> AnnotatedSrtConte
     "/episodes/{episode_id}/annotated-srt",
     response_model=AnnotatedSrtContent,
     responses={
-        status.HTTP_404_NOT_FOUND: {"description": "Episode not found"},
         status.HTTP_400_BAD_REQUEST: {"description": "Episode preprocessing not completed"},
+        status.HTTP_404_NOT_FOUND: {"description": "Episode or SRT file not found"},
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "Error writing annotated SRT file"},
     },
 )
@@ -526,8 +531,8 @@ metadata_router = APIRouter(tags=["v1_metadata"])
 @metadata_router.post(
     "/episodes/{episode_id}/metadata",
     responses={
-        status.HTTP_404_NOT_FOUND: {"description": "Episode not found"},
         status.HTTP_400_BAD_REQUEST: {"description": "Episode preprocessing not completed"},
+        status.HTTP_404_NOT_FOUND: {"description": "Episode or SRT or audio file not found"},
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "Internal server error"},
     },
 )
@@ -567,8 +572,8 @@ def generate_episode_metadata(episode_id: str, session: SessionDep) -> list[str]
 @metadata_router.get(
     "/episodes/{episode_id}/metadata-audio",
     responses={
-        status.HTTP_404_NOT_FOUND: {"description": "Episode or audio file not found"},
         status.HTTP_400_BAD_REQUEST: {"description": "Metadata generation not completed"},
+        status.HTTP_404_NOT_FOUND: {"description": "Episode or audio file not found"},
     },
 )
 def get_metadata_audio(episode_id: str, session: SessionDep) -> FileResponse:
@@ -592,8 +597,8 @@ def get_metadata_audio(episode_id: str, session: SessionDep) -> FileResponse:
     "/episodes/{episode_id}/chapters",
     response_model=str,
     responses={
-        status.HTTP_404_NOT_FOUND: {"description": "Episode or chapters file not found"},
         status.HTTP_400_BAD_REQUEST: {"description": "Metadata generation not completed"},
+        status.HTTP_404_NOT_FOUND: {"description": "Episode or chapters file not found"},
     },
 )
 def get_chapter_info(episode_id: str, session: SessionDep) -> str:
@@ -622,8 +627,8 @@ def get_chapter_info(episode_id: str, session: SessionDep) -> str:
     "/episodes/{episode_id}/show-notes",
     response_model=str,
     responses={
-        status.HTTP_404_NOT_FOUND: {"description": "Episode or show notes file not found"},
         status.HTTP_400_BAD_REQUEST: {"description": "Metadata generation not completed"},
+        status.HTTP_404_NOT_FOUND: {"description": "Episode or show notes file not found"},
     },
 )
 def get_show_notes(episode_id: str, session: SessionDep) -> str:
@@ -658,8 +663,8 @@ export_router = APIRouter(tags=["v1_export"])
     "/episodes/{episode_id}/export",
     status_code=status.HTTP_202_ACCEPTED,
     responses={
-        status.HTTP_404_NOT_FOUND: {"description": "Episode not found"},
         status.HTTP_400_BAD_REQUEST: {"description": "Episode post-processing not completed"},
+        status.HTTP_404_NOT_FOUND: {"description": "Episode not found"},
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "Internal server error"},
     },
 )
@@ -732,8 +737,8 @@ def run_export(job_id: int, episode_uuid: str, session: SessionDep) -> None:
 @export_router.get(
     "/episodes/{episode_id}/export",
     responses={
-        status.HTTP_404_NOT_FOUND: {"description": "Export not found or episode not found"},
         status.HTTP_400_BAD_REQUEST: {"description": "Export not completed"},
+        status.HTTP_404_NOT_FOUND: {"description": "Export not found or episode not found"},
     },
 )
 def download_export(episode_id: str, session: SessionDep) -> FileResponse:
