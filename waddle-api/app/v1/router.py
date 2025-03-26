@@ -92,6 +92,7 @@ def run_preprocessing(job_id: int, episode_uuid: str, session: SessionDep) -> No
     session.commit()
     session.refresh(episode)
     session.refresh(job)
+
     try:
         episode_dir = app_dir / "episodes" / episode_uuid
         preprocess_multi_files(reference=None, source_dir=episode_dir / "source", output_dir=episode_dir / "preprocessed", transcribe=True)
@@ -177,6 +178,7 @@ def get_preprocessed_audio_files(episode_id: str, session: SessionDep) -> List[s
     audio_files: List[str] = []
     for file_path in preprocessed_dir.glob("*.wav"):
         audio_files.append(file_path.name)
+
     return audio_files
 
 
@@ -236,11 +238,11 @@ def get_transcription(episode_id: str, session: SessionDep) -> str:
 # MARK: Audio editing endpoints
 # TODO: Implement audio editing endpoints
 #####################################
-audio_editing_router = APIRouter(tags=["v1_audio_editing"])
+edit_audio_router = APIRouter(tags=["v1_edit_audio"])
 
 
-@audio_editing_router.post(
-    "/episodes/{episode_id}/audio-edits",
+@edit_audio_router.post(
+    "/episodes/{episode_id}/edit-audio",
     status_code=status.HTTP_200_OK,
     responses={
         status.HTTP_404_NOT_FOUND: {"description": "Episode not found"},
@@ -248,8 +250,8 @@ audio_editing_router = APIRouter(tags=["v1_audio_editing"])
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "Internal server error"},
     },
 )
-def apply_audio_edits(episode_id: str, session: SessionDep, background_tasks: BackgroundTasks) -> Episode:
-    """Apply audio edits based on the episode's editor_state"""
+def initiate_edit_audio(episode_id: str, background_tasks: BackgroundTasks, session: SessionDep) -> Episode:
+    """Initiate audio editing for an episode"""
     episode = _get_episode_or_404(episode_id, session)
     _check_status_or_400(episode, "preprocess_status")
 
@@ -268,6 +270,7 @@ def apply_audio_edits(episode_id: str, session: SessionDep, background_tasks: Ba
     return episode
 
 
+# TODO: Skeleton implementation for audio editing
 def run_editing(job_id: int, episode_uuid: str, session: SessionDep) -> None:
     """Background task to run audio editing"""
     job = session.get(ProcessingJob, job_id)
@@ -290,16 +293,13 @@ def run_editing(job_id: int, episode_uuid: str, session: SessionDep) -> None:
         edited_dir = episode_dir / "edited"
         edited_dir.mkdir(exist_ok=True, parents=True)
 
-        # Copy all preprocessed audio files to edited directory
         for file_path in source_dir.glob("*.wav"):
             shutil.copy(file_path, edited_dir)
 
-        # Get all audio files
         edited_files = sorted(list(edited_dir.glob("*.wav")))
         if not edited_files:
             raise Exception("No audio files found")
 
-        # Create combined audio file from edits
         combine_audio_path = episode_dir / "edited-combined.wav"
         combine_audio_files(edited_files, combine_audio_path)
 
@@ -316,7 +316,7 @@ def run_editing(job_id: int, episode_uuid: str, session: SessionDep) -> None:
         session.close()
 
 
-@audio_editing_router.get(
+@edit_audio_router.get(
     "/episodes/{episode_id}/edited-audio",
 )
 def get_edited_audio_files(episode_id: str, session: SessionDep) -> FileResponse:
@@ -472,6 +472,7 @@ def update_annotated_srt(episode_id: str, annotated_srt: AnnotatedSrtContent, se
     _check_status_or_400(episode, "postprocess_status")
 
     combined_srt = _get_combined_srt_or_404(episode_id)
+
     try:
         with open(combined_srt, "w", encoding="utf-8") as file:
             file.write(annotated_srt.content)
@@ -513,7 +514,6 @@ def generate_episode_metadata(episode_id: str, session: SessionDep) -> list[str]
     srt_file = _get_combined_srt_or_404(episode_id)
     combined_audio = _get_post_combined_audio_or_404(episode_id)
 
-    # Generate metadata
     try:
         generate_metadata(source_file=srt_file, audio_file=combined_audio, output_dir=metadata_dir)
         episode.metadata_generation_status = JobStatus.completed
@@ -548,8 +548,8 @@ def get_metadata_audio(episode_id: str, session: SessionDep) -> FileResponse:
     audio_files = list(metadata_dir.glob("*.wav"))
     if not audio_files:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audio file not found")
-
     audio_file = audio_files[0]
+
     return FileResponse(path=audio_file, media_type="audio/wav", filename=audio_file.name)
 
 
@@ -573,8 +573,8 @@ def get_chapter_info(episode_id: str, session: SessionDep) -> str:
     chapter_files = list(metadata_dir.glob("*.chapters.txt"))
     if not chapter_files:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chapter file not found")
-
     chapter_file = chapter_files[0]
+
     try:
         with open(chapter_file, "r", encoding="utf-8") as file:
             chapters_content = file.read()
@@ -603,8 +603,8 @@ def get_show_notes(episode_id: str, session: SessionDep) -> str:
     show_notes_files = list(metadata_dir.glob("*.show_notes.md"))
     if not show_notes_files:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Show notes file not found")
-
     show_notes_file = show_notes_files[0]
+
     try:
         with open(show_notes_file, "r", encoding="utf-8") as file:
             show_notes_content = file.read()
@@ -715,8 +715,8 @@ def download_export(episode_id: str, session: SessionDep) -> FileResponse:
     zip_files = list(export_dir.glob("*.zip"))
     if not zip_files:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export zip file not found")
+    zip_file = zip_files[0]
 
-    zip_file = zip_files[0]  # Get the first zip file (there should only be one)
     return FileResponse(
         path=zip_file, media_type="application/zip", filename=zip_file.name, headers={"Content-Disposition": f"attachment; filename={zip_file.name}"}
     )
@@ -732,6 +732,7 @@ def _get_episode_or_404(episode_id: str, session: Session) -> Episode:
     episode = session.get(Episode, episode_id)
     if not episode:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
+
     return episode
 
 
@@ -783,7 +784,7 @@ def _get_combined_srt_or_404(episode_id: str) -> Path:
 #####################################
 v1_router.include_router(episodes_router)
 v1_router.include_router(preprocess_resources_router)
-v1_router.include_router(audio_editing_router)
+v1_router.include_router(edit_audio_router)
 v1_router.include_router(postprocess_router)
 v1_router.include_router(transcription_router)
 v1_router.include_router(metadata_router)
