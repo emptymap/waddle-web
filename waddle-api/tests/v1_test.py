@@ -390,7 +390,7 @@ def test_update_episode(session: Session, client: TestClient) -> None:
     session.commit()
 
     # Update the episode
-    response = client.patch(f"/v1/episodes/{episode.uuid}", json={"title": "Updated Title"})
+    response = client.patch(f"/v1/episodes/{episode.uuid}", json={"title": "Updated Title", "editor_state": "new"})
 
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
