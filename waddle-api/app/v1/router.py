@@ -67,6 +67,7 @@ def read_episodes(session: SessionDep, filter_params: Annotated[EpisodeFilterPar
     status_code=status.HTTP_202_ACCEPTED,
     responses={
         status.HTTP_400_BAD_REQUEST: {"description": "No file name provided"},
+        status.HTTP_413_REQUEST_ENTITY_TOO_LARGE: {"description": "Total files size too large: 500MB limit"},
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "Internal server error"},
     },
 )
@@ -74,6 +75,18 @@ async def create_episode(
     files: list[UploadFile], session: SessionDep, background_tasks: BackgroundTasks, title: Annotated[str, Form(description="Episode title")] = ""
 ) -> Episode:
     """Create a new episode and start preprocessing"""
+    MAX_TOTAL_SIZE = 500 * 1024 * 1024  # 500MB limit
+    total_size = 0
+
+    for file in files:
+        content = await file.read()
+        total_size += len(content)
+        await file.seek(0)  # Reset file position
+
+        # For early exit if total size exceeds limit
+        if total_size > MAX_TOTAL_SIZE:
+            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Total files size too large: 500MB limit")
+
     new_episode = Episode(title=title, preprocess_status=JobStatus.pending)
     session.add(new_episode)
     session.commit()
