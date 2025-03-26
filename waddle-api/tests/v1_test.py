@@ -565,8 +565,7 @@ def test_create_security(client: TestClient) -> None:
     with TemporaryDirectory() as temp_dir:
         audio_file = Path(temp_dir) / ".test.wav"
         audio_file.write_bytes(b"Dummy audio data")
-        with open(audio_file, "rb") as f:
-            response = client.post("/v1/episodes/", files={"audio": ("test.wav", f, "audio/wav")})
+        response = client.post("/v1/episodes/", json={"title": "Test Episode", "audio_file": str(audio_file)})
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
