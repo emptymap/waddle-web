@@ -17,8 +17,6 @@ from app.models import AnnotatedSrtContent, Episode, JobStatus, JobType, Process
 
 SessionDep = Annotated[Session, Depends(get_session)]
 app_dir = Path(user_data_dir(APP_NAME, APP_AUTHOR))
-
-# Create v1 router
 v1_router = APIRouter(prefix="/v1")
 
 
@@ -108,13 +106,6 @@ def run_preprocessing(job_id: int, episode_uuid: str, session: SessionDep) -> No
         session.close()
 
 
-def _get_episode_or_404(episode_id: str, session: Session) -> Episode:
-    episode = session.get(Episode, episode_id)
-    if not episode:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
-    return episode
-
-
 @episodes_router.get(
     "/episodes/{episode_id}",
     response_model=Episode,
@@ -171,19 +162,11 @@ def delete_episode(episode_id: str, session: SessionDep) -> None:
 preprocess_resources_router = APIRouter(tags=["v1_preprocessed_resources"])
 
 
-def _check_preprocessed_or_400(episode: Episode) -> None:
-    """Check if preprocessing is completed for an episode"""
-    if episode.preprocess_status != JobStatus.completed:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Episode preprocessing is not completed. Current status: {episode.preprocess_status}"
-        )
-
-
 @preprocess_resources_router.get("/episodes/{episode_id}/audios", response_model=List[str])
 def get_preprocessed_audio_files(episode_id: str, session: SessionDep) -> List[str]:
     """Retrieves all preprocessed audio filenames for a specific episode"""
     episode = _get_episode_or_404(episode_id, session)
-    _check_preprocessed_or_400(episode)
+    _check_status_or_400(episode, "preprocess_status")
 
     preprocessed_dir = app_dir / "episodes" / episode_id / "preprocessed"
     if not preprocessed_dir.exists():
@@ -205,7 +188,7 @@ def get_preprocessed_audio_files(episode_id: str, session: SessionDep) -> List[s
 def get_audio_file(episode_id: str, file_name: str, session: SessionDep) -> FileResponse:
     """Retrieves a specific audio file"""
     episode = _get_episode_or_404(episode_id, session)
-    _check_preprocessed_or_400(episode)
+    _check_status_or_400(episode, "preprocess_status")
 
     # Validate and sanitize file_name to prevent directory traversal
     if ".." in file_name or "/" in file_name or "\\" in file_name:
@@ -230,7 +213,7 @@ def get_audio_file(episode_id: str, file_name: str, session: SessionDep) -> File
 def get_transcription(episode_id: str, session: SessionDep) -> str:
     """Retrieves SRT transcription file content as a string"""
     episode = _get_episode_or_404(episode_id, session)
-    _check_preprocessed_or_400(episode)
+    _check_status_or_400(episode, "preprocess_status")
 
     preprocessed_dir = app_dir / "episodes" / episode_id / "preprocessed"
     srt_files = list(preprocessed_dir.glob("*.srt"))
@@ -254,12 +237,6 @@ def get_transcription(episode_id: str, session: SessionDep) -> str:
 audio_editing_router = APIRouter(tags=["v1_audio_editing"])
 
 
-def _check_edited_or_400(episode: Episode) -> None:
-    """Check if audio editing is completed for an episode"""
-    if episode.edit_status != JobStatus.completed:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Episode audio editing is not completed. Current status: {episode.edit_status}")
-
-
 @audio_editing_router.post(
     "/episodes/{episode_id}/audio-edits",
     status_code=status.HTTP_200_OK,
@@ -272,7 +249,7 @@ def _check_edited_or_400(episode: Episode) -> None:
 def apply_audio_edits(episode_id: str, session: SessionDep, background_tasks: BackgroundTasks) -> Episode:
     """Apply audio edits based on the episode's editor_state"""
     episode = _get_episode_or_404(episode_id, session)
-    _check_preprocessed_or_400(episode)
+    _check_status_or_400(episode, "preprocess_status")
 
     job = ProcessingJob(episode_id=episode.uuid, type=JobType.edit, status=JobStatus.pending)
     session.add(job)
@@ -343,7 +320,7 @@ def run_editing(job_id: int, episode_uuid: str, session: SessionDep) -> None:
 def get_edited_audio_files(episode_id: str, session: SessionDep) -> FileResponse:
     """Get the final edited audio file"""
     episode = _get_episode_or_404(episode_id, session)
-    _check_edited_or_400(episode)
+    _check_status_or_400(episode, "edit_status")
 
     episode_dir = app_dir / "episodes" / episode_id
     edited_combine_path = episode_dir / "edited-combined.wav"
@@ -359,34 +336,6 @@ def get_edited_audio_files(episode_id: str, session: SessionDep) -> FileResponse
 postprocess_router = APIRouter(tags=["v1_postprocess"])
 
 
-def _check_postprocessed_or_400(episode: Episode) -> None:
-    """Check if post-processing is completed for an episode"""
-    if episode.postprocess_status != JobStatus.completed:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Episode post-processing is not completed. Current status: {episode.postprocess_status}"
-        )
-
-
-def _get_post_combined_audio_or_404(episode_id: str) -> Path:
-    """Get the combined audio file for an episode"""
-    episode_dir = app_dir / "episodes" / episode_id
-    target_dir = episode_dir / "postprocessed"
-    target_files = list(target_dir.glob("*.wav"))
-    if not target_files:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Edited audio file not found")
-
-    combined_audio = None
-    for audio_file in target_files:
-        audio_prefix = audio_file.stem
-        if "-" not in audio_prefix:
-            combined_audio = audio_file
-            break
-    if combined_audio is None:
-        combined_audio = target_files[0]
-
-    return combined_audio
-
-
 @postprocess_router.post(
     "/episodes/{episode_id}/postprocess",
     status_code=status.HTTP_202_ACCEPTED,
@@ -399,7 +348,7 @@ def _get_post_combined_audio_or_404(episode_id: str) -> Path:
 def initiate_postprocess(episode_id: str, background_tasks: BackgroundTasks, session: SessionDep) -> Episode:
     """Initiate post-processing for an episode using its current editor state"""
     episode = _get_episode_or_404(episode_id, session)
-    _check_edited_or_400(episode)
+    _check_status_or_400(episode, "edit_status")
 
     job = ProcessingJob(episode_id=episode.uuid, type=JobType.postprocess, status=JobStatus.pending)
     session.add(job)
@@ -463,13 +412,12 @@ def run_postprocessing(job_id: int, episode_uuid: str, session: SessionDep) -> N
 def get_postprocessed_audio(episode_id: str, session: SessionDep) -> FileResponse:
     """Get the final post-processed audio file"""
     episode = _get_episode_or_404(episode_id, session)
-    _check_postprocessed_or_400(episode)
+    _check_status_or_400(episode, "postprocess_status")
 
     postprocessed_dir = app_dir / "episodes" / episode_id / "postprocessed"
     if not postprocessed_dir.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post-processed directory not found")
 
-    # Look for audio files (assuming .wav format)
     audio_files = list(postprocessed_dir.glob("*.wav"))
     if not audio_files:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post-processed audio file not found")
@@ -484,26 +432,6 @@ def get_postprocessed_audio(episode_id: str, session: SessionDep) -> FileRespons
 transcription_router = APIRouter(tags=["v1_transcription"])
 
 
-def _get_combined_srt_or_404(episode_id: str) -> Path:
-    """Get the combined SRT file for an episode"""
-    episode_dir = app_dir / "episodes" / episode_id
-    postprocessed_dir = episode_dir / "postprocessed"
-    srt_files = list(postprocessed_dir.glob("*.srt"))
-    if not srt_files:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SRT file not found")
-
-    combined_srt = None
-    for srt_file in srt_files:
-        srt_prefix = srt_file.stem
-        if "-" not in srt_prefix:
-            combined_srt = srt_file
-            break
-    if combined_srt is None:
-        combined_srt = srt_files[0]
-
-    return combined_srt
-
-
 @transcription_router.get(
     "/episodes/{episode_id}/annotated-srt",
     response_model=AnnotatedSrtContent,
@@ -516,7 +444,7 @@ def _get_combined_srt_or_404(episode_id: str) -> Path:
 def get_annotated_srt(episode_id: str, session: SessionDep) -> AnnotatedSrtContent:
     """Retrieves annotated SRT with speaker information"""
     episode = _get_episode_or_404(episode_id, session)
-    _check_postprocessed_or_400(episode)
+    _check_status_or_400(episode, "postprocess_status")
 
     combined_srt = _get_combined_srt_or_404(episode_id)
     try:
@@ -539,7 +467,7 @@ def get_annotated_srt(episode_id: str, session: SessionDep) -> AnnotatedSrtConte
 def update_annotated_srt(episode_id: str, annotated_srt: AnnotatedSrtContent, session: SessionDep) -> AnnotatedSrtContent:
     """Updates annotated SRT with speaker information"""
     episode = _get_episode_or_404(episode_id, session)
-    _check_postprocessed_or_400(episode)
+    _check_status_or_400(episode, "postprocess_status")
 
     combined_srt = _get_combined_srt_or_404(episode_id)
     try:
@@ -556,15 +484,6 @@ def update_annotated_srt(episode_id: str, annotated_srt: AnnotatedSrtContent, se
 metadata_router = APIRouter(tags=["v1_metadata"])
 
 
-def _check_metadata_or_400(episode: Episode) -> None:
-    """Check if metadata generation is completed for an episode"""
-    if episode.metadata_generation_status != JobStatus.completed:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Episode metadata generation is not completed. Current status: {episode.metadata_generation_status}",
-        )
-
-
 @metadata_router.post(
     "/episodes/{episode_id}/metadata",
     status_code=status.HTTP_202_ACCEPTED,
@@ -579,7 +498,7 @@ def generate_episode_metadata(episode_id: str, session: SessionDep) -> list[str]
     Generate metadata for an episode including chapters and show notes based on the annotated SRT file.
     """
     episode = _get_episode_or_404(episode_id, session)
-    _check_postprocessed_or_400(episode)
+    _check_status_or_400(episode, "postprocess_status")
 
     episode.metadata_generation_status = JobStatus.processing
     session.commit()
@@ -618,7 +537,7 @@ def generate_episode_metadata(episode_id: str, session: SessionDep) -> list[str]
 def get_metadata_audio(episode_id: str, session: SessionDep) -> FileResponse:
     """Get the audio file for an episode"""
     episode = _get_episode_or_404(episode_id, session)
-    _check_metadata_or_400(episode)
+    _check_status_or_400(episode, "metadata_generation_status")
 
     metadata_dir = app_dir / "episodes" / episode_id / "metadata"
     if not metadata_dir.exists():
@@ -643,7 +562,7 @@ def get_metadata_audio(episode_id: str, session: SessionDep) -> FileResponse:
 def get_chapter_info(episode_id: str, session: SessionDep) -> str:
     """Get chapter information for an episode"""
     episode = _get_episode_or_404(episode_id, session)
-    _check_metadata_or_400(episode)
+    _check_status_or_400(episode, "metadata_generation_status")
 
     metadata_dir = app_dir / "episodes" / episode_id / "metadata"
     if not metadata_dir.exists():
@@ -673,7 +592,7 @@ def get_chapter_info(episode_id: str, session: SessionDep) -> str:
 def get_show_notes(episode_id: str, session: SessionDep) -> str:
     """Get show notes for an episode"""
     episode = _get_episode_or_404(episode_id, session)
-    _check_metadata_or_400(episode)
+    _check_status_or_400(episode, "metadata_generation_status")
 
     metadata_dir = app_dir / "episodes" / episode_id / "metadata"
     if not metadata_dir.exists():
@@ -698,12 +617,6 @@ def get_show_notes(episode_id: str, session: SessionDep) -> str:
 export_router = APIRouter(tags=["v1_export"])
 
 
-def _check_export_or_400(episode: Episode) -> None:
-    """Check if export is completed for an episode"""
-    if episode.export_status != JobStatus.completed:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Episode export is not completed. Current status: {episode.export_status}")
-
-
 @export_router.post(
     "/episodes/{episode_id}/export",
     status_code=status.HTTP_202_ACCEPTED,
@@ -716,7 +629,7 @@ def _check_export_or_400(episode: Episode) -> None:
 def initiate_export(episode_id: str, background_tasks: BackgroundTasks, session: SessionDep) -> Episode:
     """Initiate export of processed episode files"""
     episode = _get_episode_or_404(episode_id, session)
-    _check_metadata_or_400(episode)
+    _check_status_or_400(episode, "metadata_generation_status")
 
     job = ProcessingJob(episode_id=episode.uuid, type=JobType.export, status=JobStatus.pending)
     session.add(job)
@@ -791,7 +704,7 @@ def run_export(job_id: int, episode_uuid: str, session: SessionDep) -> None:
 def download_export(episode_id: str, session: SessionDep) -> FileResponse:
     """Download the exported zip file for an episode"""
     episode = _get_episode_or_404(episode_id, session)
-    _check_export_or_400(episode)
+    _check_status_or_400(episode, "export_status")
 
     export_dir = app_dir / "episodes" / episode_id / "export"
     if not export_dir.exists():
@@ -805,6 +718,66 @@ def download_export(episode_id: str, session: SessionDep) -> FileResponse:
     return FileResponse(
         path=zip_file, media_type="application/zip", filename=zip_file.name, headers={"Content-Disposition": f"attachment; filename={zip_file.name}"}
     )
+
+
+#####################################
+# MARK: Helper functions
+#####################################
+
+
+def _get_episode_or_404(episode_id: str, session: Session) -> Episode:
+    """Get an episode by ID or raise a 404 error if not found"""
+    episode = session.get(Episode, episode_id)
+    if not episode:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
+    return episode
+
+
+def _check_status_or_400(episode: Episode, status_field: str) -> None:
+    """Check if a specific status is completed for an episode"""
+    target_status = getattr(episode, status_field)
+    if target_status != JobStatus.completed:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Episode {status_field} is not completed. Current status: {target_status}")
+
+
+def _get_post_combined_audio_or_404(episode_id: str) -> Path:
+    """Get the combined audio file for an episode"""
+    episode_dir = app_dir / "episodes" / episode_id
+    target_dir = episode_dir / "postprocessed"
+    target_files = list(target_dir.glob("*.wav"))
+    if not target_files:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Edited audio file not found")
+
+    combined_audio = None
+    for audio_file in target_files:
+        audio_prefix = audio_file.stem
+        if "-" not in audio_prefix:
+            combined_audio = audio_file
+            break
+    if combined_audio is None:
+        combined_audio = target_files[0]
+
+    return combined_audio
+
+
+def _get_combined_srt_or_404(episode_id: str) -> Path:
+    """Get the combined SRT file for an episode"""
+    episode_dir = app_dir / "episodes" / episode_id
+    postprocessed_dir = episode_dir / "postprocessed"
+    srt_files = list(postprocessed_dir.glob("*.srt"))
+    if not srt_files:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SRT file not found")
+
+    combined_srt = None
+    for srt_file in srt_files:
+        srt_prefix = srt_file.stem
+        if "-" not in srt_prefix:
+            combined_srt = srt_file
+            break
+    if combined_srt is None:
+        combined_srt = srt_files[0]
+
+    return combined_srt
 
 
 #####################################
