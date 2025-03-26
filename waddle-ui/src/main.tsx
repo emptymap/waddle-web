@@ -4,6 +4,7 @@ import "./index.css";
 import { Provider } from "./components/ui/provider.tsx";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 
+import { Toaster } from "./components/ui/toaster.tsx";
 import { routeTree } from "./routeTree.gen";
 
 const router = createRouter({ routeTree });
@@ -22,6 +23,7 @@ if (root) {
 		<StrictMode>
 			<Provider>
 				<RouterProvider router={router} />
+				<Toaster />
 			</Provider>
 		</StrictMode>,
 	);
