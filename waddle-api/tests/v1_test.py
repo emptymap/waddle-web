@@ -562,6 +562,9 @@ def test_nonexistent_episode(client: TestClient) -> None:
     response = client.get("/v1/episodes/nonexistent-id")
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
+    response = client.get("/v1/episodes/nonexistent-id/audio")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
     response = client.patch("/v1/episodes/nonexistent-id", json={"title": "Updated Title"})
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
