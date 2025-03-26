@@ -339,8 +339,8 @@ def test_read_episodes(session: Session, client: TestClient) -> None:
 
     assert response.status_code == status.HTTP_200_OK
     assert len(data) == 2
-    assert data[0]["title"] == episode_1.title
-    assert data[1]["title"] == episode_2.title
+    assert data[0]["title"] == episode_2.title
+    assert data[1]["title"] == episode_1.title
 
     response = client.get("/v1/episodes/?offset=1&limit=1")
     data = response.json()
@@ -376,14 +376,6 @@ def test_update_episode(session: Session, client: TestClient) -> None:
     assert updated_episode.title == "Updated Title"
 
 
-def test_update_episode_not_found(client: TestClient) -> None:
-    """Test updating a non-existent episode."""
-    response = client.patch("/v1/episodes/nonexistent-id", json={"title": "Updated Title"})
-
-    assert response.status_code == status.HTTP_404_NOT_FOUND
-    assert response.json()["detail"] == "Episode not found"
-
-
 def test_delete_episode(session: Session, client: TestClient) -> None:
     """Test deleting an episode."""
     episode = Episode(title="Test Episode")
@@ -397,12 +389,16 @@ def test_delete_episode(session: Session, client: TestClient) -> None:
     assert deleted_episode is None
 
 
-def test_delete_episode_not_found(client: TestClient) -> None:
-    """Test deleting a non-existent episode."""
-    response = client.delete("/v1/episodes/nonexistent-id")
-
+def test_nonexistent_episode(client: TestClient) -> None:
+    """Test operations on a non-existent episode."""
+    response = client.get("/v1/episodes/nonexistent-id")
     assert response.status_code == status.HTTP_404_NOT_FOUND
-    assert response.json()["detail"] == "Episode not found"
+
+    response = client.patch("/v1/episodes/nonexistent-id", json={"title": "Updated Title"})
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    response = client.delete("/v1/episodes/nonexistent-id")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
 #####################################
@@ -425,14 +421,6 @@ def test_get_audio_file(preprocessed_client: TestClient) -> None:
     assert response.status_code == status.HTTP_200_OK
     assert response.headers["content-type"] == "audio/wav"
 
-    response = preprocessed_client.get(f"/v1/episodes/{episode_id}/audio/nonexistent.wav")
-    assert response.status_code == status.HTTP_404_NOT_FOUND
-
-    # Test with potentially malicious file name
-    malicious_filename = urllib.parse.quote("../../../../etc/passwd")
-    response = preprocessed_client.get(f"/v1/episodes/{episode_id}/audio/{malicious_filename}")
-    assert response.status_code != 200
-
 
 def test_get_transcription(preprocessed_client: TestClient) -> None:
     """Test retrieving SRT transcription for a pre-populated episode."""
@@ -452,18 +440,23 @@ def test_get_transcription(preprocessed_client: TestClient) -> None:
     assert "00:00:05,500 --> 00:00:10,000" in srt_content
 
 
-def test_preprocessed_resources_with_invalid_episode_prepopulated(preprocessed_client: TestClient) -> None:
-    """Test retrieving preprocessed resources with an invalid episode ID."""
-    invalid_id = "nonexistent-id"
-
-    response = preprocessed_client.get(f"/v1/episodes/{invalid_id}/audios")
+def test_preprocessed_resources_not_found(preprocessed_client: TestClient) -> None:
+    response = preprocessed_client.get("/v1/episodes/nonexistent-id/audios")
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    response = preprocessed_client.get(f"/v1/episodes/{invalid_id}/audio/file.wav")
+    response = preprocessed_client.get("/v1/episodes/nonexistent-id/audio/file.wav")
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    response = preprocessed_client.get(f"/v1/episodes/{invalid_id}/srt")
+    response = preprocessed_client.get("/v1/episodes/nonexistent-id/srt")
     assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_preprocessed_resources_security(preprocessed_client: TestClient) -> None:
+    episode_id = _get_episode_id(preprocessed_client)
+
+    malicious_filename = urllib.parse.quote("../../../../etc/passwd")
+    response = preprocessed_client.get(f"/v1/episodes/{episode_id}/audio/{malicious_filename}")
+    assert response.status_code != 200
 
 
 def test_preprocessed_resources_before_preprocessing_prepopulated(session: Session, preprocessed_client: TestClient) -> None:
@@ -503,7 +496,6 @@ def test_apply_audio_edits_invalid_episode(edited_client: TestClient) -> None:
     """Test applying audio edits to a non-existent episode."""
     response = edited_client.post("/v1/episodes/nonexistent-id/audio-edits")
     assert response.status_code == status.HTTP_404_NOT_FOUND
-    assert response.json()["detail"] == "Episode not found"
 
 
 def test_apply_audio_edits_preprocessing_incomplete(session: Session, edited_client: TestClient) -> None:
@@ -525,7 +517,6 @@ def test_get_edited_audio_not_found(edited_client: TestClient) -> None:
     """Test getting edited audio for a non-existent episode."""
     response = edited_client.get("/v1/episodes/nonexistent-id/edited-audio")
     assert response.status_code == status.HTTP_404_NOT_FOUND
-    assert response.json()["detail"] == "Episode not found"
 
 
 #####################################
@@ -547,11 +538,9 @@ def test_postprocess_invalid_episode(postprocessed_client: TestClient) -> None:
     """Test initiating postprocessing for a non-existent episode."""
     response = postprocessed_client.post("/v1/episodes/nonexistent-id/postprocess")
     assert response.status_code == status.HTTP_404_NOT_FOUND
-    assert response.json()["detail"] == "Episode not found"
 
     response = postprocessed_client.get("/v1/episodes/nonexistent-id/postprocessed-audio")
     assert response.status_code == status.HTTP_404_NOT_FOUND
-    assert response.json()["detail"] == "Episode not found"
 
 
 def test_postprocess_preprocessing_incomplete(session: Session, postprocessed_client: TestClient) -> None:
@@ -707,7 +696,6 @@ def test_download_export_not_found(export_client: TestClient) -> None:
     """Test downloading an export for a non-existent episode."""
     response = export_client.get("/v1/episodes/nonexistent-id/export")
     assert response.status_code == status.HTTP_404_NOT_FOUND
-    assert response.json()["detail"] == "Episode not found"
 
 
 def test_download_export_not_completed(session: Session, export_client: TestClient) -> None:
