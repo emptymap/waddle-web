@@ -79,6 +79,13 @@ async def create_episode(
     total_size = 0
 
     for file in files:
+        valid_extensions = [".wav", ".m4a", ".aifc", ".mp4"]
+        if not file.filename:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No file name provided")
+        file_ext = Path(file.filename).suffix.lower()
+        if file_ext not in valid_extensions:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unsupported file type: {file_ext}")
+
         content = await file.read()
         total_size += len(content)
         await file.seek(0)  # Reset file position

@@ -26,7 +26,7 @@ class Episode(SQLModel, table=True):
     metadata_generation_status: JobStatus = Field(default=JobStatus.init)
     export_status: JobStatus = Field(default=JobStatus.init)
     editor_state: str = Field(default="")
-    title: str = Field(default="")
+    title: str = Field(default="", max_length=100)
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
 
