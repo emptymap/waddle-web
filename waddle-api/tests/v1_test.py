@@ -19,7 +19,7 @@ from app.models import Episode, JobStatus, ProcessingJob
 tests_dir = Path(__file__).resolve().parent
 
 ##############################
-# MARK: Fixtures
+# MARK: Helper functions
 ##############################
 
 
@@ -52,18 +52,14 @@ def client_fixture(session: Session) -> Generator[TestClient]:
 
 
 def _get_episode_dir(temp_dir_path: Path, episode_id: str) -> Path:
-    """
-    Get the episode directory path for the prepopulated episode.
-    """
+    """Get the episode directory path for the prepopulated episode."""
     episode_dir = temp_dir_path / "episodes" / episode_id
     episode_dir.mkdir(parents=True, exist_ok=True)
     return episode_dir
 
 
 def _add_source(episode_dir: Path) -> None:
-    """
-    Add source WAV files to the episode directory.
-    """
+    """Add source WAV files to the episode directory."""
     source_dir = episode_dir / "source"
     source_dir.mkdir(exist_ok=True)
 
@@ -73,9 +69,7 @@ def _add_source(episode_dir: Path) -> None:
 
 
 def _add_preprocessed(episode_dir: Path) -> None:
-    """
-    Add preprocessed files to the episode directory.
-    """
+    """Add preprocessed files to the episode directory."""
     preprocessed_dir = episode_dir / "preprocessed"
     preprocessed_dir.mkdir(exist_ok=True)
 
@@ -90,13 +84,10 @@ def _add_preprocessed(episode_dir: Path) -> None:
 
 
 def _add_edited(episode_dir: Path) -> None:
-    """
-    Add edited files to the episode directory.
-    """
+    """Add edited files to the episode directory."""
     edited_dir = episode_dir / "edited"
     edited_dir.mkdir(exist_ok=True)
 
-    # Add edited audio file
     original_wav = tests_dir / "ep0" / "ep12-masa.wav"
     edited_wav = edited_dir / "edited_sample.wav"
     edited_wav.write_bytes(original_wav.read_bytes())
@@ -106,18 +97,14 @@ def _add_edited(episode_dir: Path) -> None:
 
 
 def _add_postprocessed(episode_dir: Path) -> None:
-    """
-    Add postprocessed files to the episode directory.
-    """
+    """Add postprocessed files to the episode directory."""
     postprocessed_dir = episode_dir / "postprocessed"
     postprocessed_dir.mkdir(exist_ok=True)
 
-    # Add postprocessed audio file
     original_wav = tests_dir / "ep0" / "ep12-masa.wav"
     postprocessed_wav = postprocessed_dir / "combined.wav"
     postprocessed_wav.write_bytes(original_wav.read_bytes())
 
-    # Add postprocessed SRT file
     srt_file = postprocessed_dir / "postprocessed_transcript.srt"
     with open(srt_file, "w") as f:
         f.write("1\n00:00:00,000 --> 00:00:05,000\nThis is a postprocessed transcript.\n\n")
@@ -125,9 +112,7 @@ def _add_postprocessed(episode_dir: Path) -> None:
 
 
 def _add_metadata(episode_dir: Path) -> None:
-    """
-    Add metadata files to the episode directory.
-    """
+    """Add metadata files to the episode directory."""
     metadata_dir = episode_dir / "metadata"
     metadata_dir.mkdir(exist_ok=True)
 
@@ -151,9 +136,7 @@ def _add_metadata(episode_dir: Path) -> None:
 
 
 def _add_export(episode_dir: Path) -> None:
-    """
-    Add export files to the episode directory.
-    """
+    """Add export files to the episode directory."""
     export_dir = episode_dir / "export"
     export_dir.mkdir(exist_ok=True)
     zip_path = export_dir / "Test Episode.zip"
@@ -170,9 +153,7 @@ def _add_episode_to_db(
     metadata_generation_status: JobStatus = JobStatus.init,
     export_status: JobStatus = JobStatus.init,
 ) -> None:
-    """
-    Add an episode to the database with a given ID.
-    """
+    """Add an episode to the database with a given ID."""
     episode = Episode(
         uuid=episode_id,
         title="Test Episode",
@@ -188,9 +169,7 @@ def _add_episode_to_db(
 
 @pytest.fixture(name="preprocessed_client")
 def preprocessed_client_fixture(session: Session, monkeypatch: MonkeyPatch) -> Generator[TestClient]:
-    """
-    After preprocessed client.
-    """
+    """After preprocessed client."""
     with TemporaryDirectory() as temp_dir:
         temp_dir_path = Path(temp_dir)
         monkeypatch.setattr("app.v1.router.app_dir", temp_dir_path)
@@ -300,9 +279,7 @@ def metadata_client_fixture(session: Session, monkeypatch: MonkeyPatch) -> Gener
 
 @pytest.fixture(name="export_client")
 def export_client_fixture(session: Session, monkeypatch: MonkeyPatch) -> Generator[TestClient]:
-    """
-    After export client
-    """
+    """After export client"""
     with TemporaryDirectory() as temp_dir:
         temp_dir_path = Path(temp_dir)
         monkeypatch.setattr("app.v1.router.app_dir", temp_dir_path)
@@ -351,14 +328,12 @@ def test_read_episodes_empty(client: TestClient) -> None:
 
 def test_read_episodes(session: Session, client: TestClient) -> None:
     """Test reading episodes with data in the database."""
-    # Create test episodes
     episode_1 = Episode(title="Episode 1")
     episode_2 = Episode(title="Episode 2")
     session.add(episode_1)
     session.add(episode_2)
     session.commit()
 
-    # Test reading episodes
     response = client.get("/v1/episodes/")
     data = response.json()
 
@@ -367,7 +342,6 @@ def test_read_episodes(session: Session, client: TestClient) -> None:
     assert data[0]["title"] == episode_1.title
     assert data[1]["title"] == episode_2.title
 
-    # Test pagination
     response = client.get("/v1/episodes/?offset=1&limit=1")
     data = response.json()
     assert len(data) == 1
@@ -376,14 +350,11 @@ def test_read_episodes(session: Session, client: TestClient) -> None:
 
 def test_read_episode(session: Session, client: TestClient) -> None:
     """Test reading a single episode."""
-    # Create a test episode
     episode = Episode(title="Test Episode")
     session.add(episode)
     session.commit()
 
-    # Read the episode
     response = client.get(f"/v1/episodes/{episode.uuid}")
-
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
     assert data["title"] == episode.title
@@ -391,19 +362,15 @@ def test_read_episode(session: Session, client: TestClient) -> None:
 
 def test_update_episode(session: Session, client: TestClient) -> None:
     """Test updating an episode."""
-    # Create a test episode
     episode = Episode(title="Original Title")
     session.add(episode)
     session.commit()
 
-    # Update the episode
     response = client.patch(f"/v1/episodes/{episode.uuid}", json={"title": "Updated Title", "editor_state": "new"})
-
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
     assert data["title"] == "Updated Title"
 
-    # Verify the database was updated
     updated_episode = session.get(Episode, episode.uuid)
     assert updated_episode is not None
     assert updated_episode.title == "Updated Title"
@@ -651,11 +618,9 @@ def test_transcription_management_preprocessing_incomplete(session: Session, pos
 
     episode_id = episode.uuid
 
-    # Test getting SRT before postprocessing is complete
     response = postprocessed_client.get(f"/v1/episodes/{episode_id}/annotated-srt")
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    # Test updating SRT before postprocessing is complete
     response = postprocessed_client.put(f"/v1/episodes/{episode_id}/annotated-srt", json={"content": "Test content"})
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
@@ -712,12 +677,10 @@ def test_missing_files(metadata_client: TestClient, monkeypatch: MonkeyPatch) ->
         temp_dir_path = Path(temp_dir)
         monkeypatch.setattr("app.v1.router.app_dir", temp_dir_path)
 
-        # Create episode directory with empty metadata directory
         episode_dir = temp_dir_path / "episodes" / episode_id
         metadata_dir = episode_dir / "metadata"
         metadata_dir.mkdir(parents=True, exist_ok=True)
 
-        # Test missing files
         response = metadata_client.get(f"/v1/episodes/{episode_id}/chapters")
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert "Chapter file not found" in response.json()["detail"]
@@ -771,7 +734,6 @@ def test_download_export_not_completed(session: Session, export_client: TestClie
 ##################################
 def test_process_all(session: Session, client: TestClient, monkeypatch: MonkeyPatch) -> None:
     """Test creating a new episode with multiple WAV files and wait for preprocessing to complete."""
-
     with TemporaryDirectory() as temp_dir:
         monkeypatch.setattr("app.v1.router.app_dir", Path(temp_dir))
 
@@ -879,7 +841,6 @@ def test_process_all(session: Session, client: TestClient, monkeypatch: MonkeyPa
         response = client.get(f"/v1/episodes/{data['uuid']}/show-notes")
         assert response.status_code == status.HTTP_200_OK
         content = response.content.decode("utf-8")
-        print(content)
         assert "- [testurl](https://www.youtube.com/watch?v=1)" in content
 
         # Export
