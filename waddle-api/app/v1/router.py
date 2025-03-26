@@ -15,6 +15,7 @@ from waddle.processor import postprocess_multi_files, preprocess_multi_files
 from app.db import get_session
 from app.defaults import APP_AUTHOR, APP_NAME
 from app.models import AnnotatedSrtContent, Episode, EpisodeFilterParams, EpisodeSortBy, JobStatus, JobType, ProcessingJob, SortOrder, UpdateEpisodeRequest
+from app.v1.utils import get_combined_srt_or_404, get_episode_or_404, get_post_combined_audio_or_404, validate_audio_files_or_400_413, validate_status_or_400
 
 SessionDep = Annotated[Session, Depends(get_session)]
 app_dir = Path(user_data_dir(APP_NAME, APP_AUTHOR))
@@ -66,46 +67,13 @@ def read_episodes(session: SessionDep, filter_params: Annotated[EpisodeFilterPar
     return list(episodes)
 
 
-async def _validate_audio_files_or_400_413(files: list[UploadFile]) -> None:
-    """Check if the uploaded files are audio files"""
-    VARID_EXTENSIONS = [".wav", ".m4a", ".aifc", ".mp4"]
-    for file in files:
-        if not file.filename:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No file name provided")
-        file_ext = Path(file.filename).suffix.lower()
-        if file_ext not in VARID_EXTENSIONS:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unsupported file type: {file_ext}")
-
-    MAX_TOTAL_SIZE = 500 * 1024 * 1024  # 500MB limit
-    total_size = 0
-    for file in files:
-        # Try to get size from content-length header if available
-        if "content-length" in file.headers:
-            file_size = int(file.headers["content-length"])
-            total_size += file_size
-        else:
-            chunk_size = 1024 * 1024  # 1MB chunks
-            file_size = 0
-            while True:
-                chunk = await file.read(chunk_size)
-                if not chunk:
-                    break
-                file_size += len(chunk)
-                total_size += len(chunk)
-
-                # Early exit if size exceeds limit
-                if total_size > MAX_TOTAL_SIZE:
-                    raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Total files size too large: 500MB limit")
-
-            await file.seek(0)
-
-
 @episodes_router.post(
     "/episodes/",
     status_code=status.HTTP_202_ACCEPTED,
     responses={
         status.HTTP_400_BAD_REQUEST: {"description": "No file name provided"},
         status.HTTP_413_REQUEST_ENTITY_TOO_LARGE: {"description": "Total files size too large: 500MB limit"},
+        status.HTTP_422_UNPROCESSABLE_ENTITY: {"description": "No files provided or invalid file extension"},
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "Internal server error"},
     },
 )
@@ -113,7 +81,7 @@ async def create_episode(
     files: list[UploadFile], session: SessionDep, background_tasks: BackgroundTasks, title: Annotated[str, Form(description="Episode title")] = ""
 ) -> Episode:
     """Create a new episode and start preprocessing"""
-    await _validate_audio_files_or_400_413(files)
+    await validate_audio_files_or_400_413(files)
 
     new_episode = Episode(title=title, preprocess_status=JobStatus.pending)
     session.add(new_episode)
@@ -184,7 +152,7 @@ def run_preprocessing(job_id: int, episode_uuid: str, session: SessionDep) -> No
 )
 def get_episode(episode_id: str, session: SessionDep) -> Episode:
     """Get a specific episode by ID"""
-    return _get_episode_or_404(episode_id, session)
+    return get_episode_or_404(episode_id, session)
 
 
 @episodes_router.patch(
@@ -196,7 +164,7 @@ def get_episode(episode_id: str, session: SessionDep) -> Episode:
 )
 def update_episode(episode_id: str, update_data: UpdateEpisodeRequest, session: SessionDep) -> Episode:
     """Update an existing episode"""
-    episode = _get_episode_or_404(episode_id, session)
+    episode = get_episode_or_404(episode_id, session)
 
     if update_data.title is not None:
         episode.title = update_data.title
@@ -213,7 +181,7 @@ def update_episode(episode_id: str, update_data: UpdateEpisodeRequest, session: 
 )
 def delete_episode(episode_id: str, session: SessionDep) -> None:
     """Delete an episode"""
-    episode = _get_episode_or_404(episode_id, session)
+    episode = get_episode_or_404(episode_id, session)
     session.delete(episode)
     session.commit()
 
@@ -233,8 +201,8 @@ preprocess_resources_router = APIRouter(tags=["v1_preprocessed_resources"])
 @preprocess_resources_router.get("/episodes/{episode_id}/audios", response_model=List[str])
 def get_preprocessed_audio_files(episode_id: str, session: SessionDep) -> List[str]:
     """Retrieves all preprocessed audio filenames for a specific episode"""
-    episode = _get_episode_or_404(episode_id, session)
-    _validate_status_or_400(episode, "preprocess_status")
+    episode = get_episode_or_404(episode_id, session)
+    validate_status_or_400(episode, "preprocess_status")
 
     preprocessed_dir = app_dir / "episodes" / episode_id / "preprocessed"
     if not preprocessed_dir.exists():
@@ -256,8 +224,8 @@ def get_preprocessed_audio_files(episode_id: str, session: SessionDep) -> List[s
 )
 def get_audio_file(episode_id: str, file_name: str, session: SessionDep) -> FileResponse:
     """Retrieves a specific audio file"""
-    episode = _get_episode_or_404(episode_id, session)
-    _validate_status_or_400(episode, "preprocess_status")
+    episode = get_episode_or_404(episode_id, session)
+    validate_status_or_400(episode, "preprocess_status")
 
     audio_file_path = app_dir / "episodes" / episode_id / "preprocessed" / file_name
     if not audio_file_path.exists():
@@ -277,8 +245,8 @@ def get_audio_file(episode_id: str, file_name: str, session: SessionDep) -> File
 )
 def get_transcription(episode_id: str, session: SessionDep) -> str:
     """Retrieves SRT transcription file content as a string"""
-    episode = _get_episode_or_404(episode_id, session)
-    _validate_status_or_400(episode, "preprocess_status")
+    episode = get_episode_or_404(episode_id, session)
+    validate_status_or_400(episode, "preprocess_status")
 
     preprocessed_dir = app_dir / "episodes" / episode_id / "preprocessed"
     srt_files = list(preprocessed_dir.glob("*.srt"))
@@ -313,8 +281,8 @@ edit_audio_router = APIRouter(tags=["v1_edit_audio"])
 )
 def initiate_edit_audio(episode_id: str, background_tasks: BackgroundTasks, session: SessionDep) -> Episode:
     """Initiate audio editing for an episode"""
-    episode = _get_episode_or_404(episode_id, session)
-    _validate_status_or_400(episode, "preprocess_status")
+    episode = get_episode_or_404(episode_id, session)
+    validate_status_or_400(episode, "preprocess_status")
 
     job = ProcessingJob(episode_id=episode.uuid, type=JobType.edit, status=JobStatus.pending)
     session.add(job)
@@ -380,8 +348,8 @@ def run_editing(job_id: int, episode_uuid: str, session: SessionDep) -> None:
 )
 def get_edited_audio_files(episode_id: str, session: SessionDep) -> FileResponse:
     """Get the final edited audio file"""
-    episode = _get_episode_or_404(episode_id, session)
-    _validate_status_or_400(episode, "edit_status")
+    episode = get_episode_or_404(episode_id, session)
+    validate_status_or_400(episode, "edit_status")
 
     episode_dir = app_dir / "episodes" / episode_id
     edited_combine_path = episode_dir / "edited-combined.wav"
@@ -408,8 +376,8 @@ postprocess_router = APIRouter(tags=["v1_postprocess"])
 )
 def initiate_postprocess(episode_id: str, background_tasks: BackgroundTasks, session: SessionDep) -> Episode:
     """Initiate post-processing for an episode using its current editor state"""
-    episode = _get_episode_or_404(episode_id, session)
-    _validate_status_or_400(episode, "edit_status")
+    episode = get_episode_or_404(episode_id, session)
+    validate_status_or_400(episode, "edit_status")
 
     job = ProcessingJob(episode_id=episode.uuid, type=JobType.postprocess, status=JobStatus.pending)
     session.add(job)
@@ -470,8 +438,8 @@ def run_postprocessing(job_id: int, episode_uuid: str, session: SessionDep) -> N
 )
 def get_postprocessed_audio(episode_id: str, session: SessionDep) -> FileResponse:
     """Get the final post-processed audio file"""
-    episode = _get_episode_or_404(episode_id, session)
-    _validate_status_or_400(episode, "postprocess_status")
+    episode = get_episode_or_404(episode_id, session)
+    validate_status_or_400(episode, "postprocess_status")
 
     postprocessed_dir = app_dir / "episodes" / episode_id / "postprocessed"
     if not postprocessed_dir.exists():
@@ -480,8 +448,7 @@ def get_postprocessed_audio(episode_id: str, session: SessionDep) -> FileRespons
     audio_files = list(postprocessed_dir.glob("*.wav"))
     if not audio_files:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post-processed audio file not found")
-
-    combined_audio = _get_post_combined_audio_or_404(episode_id)
+    combined_audio = get_post_combined_audio_or_404(episode_id, app_dir)
     return FileResponse(path=combined_audio, media_type="audio/wav", filename=combined_audio.name)
 
 
@@ -502,10 +469,10 @@ transcription_router = APIRouter(tags=["v1_transcription"])
 )
 def get_annotated_srt(episode_id: str, session: SessionDep) -> AnnotatedSrtContent:
     """Retrieves annotated SRT with speaker information"""
-    episode = _get_episode_or_404(episode_id, session)
-    _validate_status_or_400(episode, "postprocess_status")
+    episode = get_episode_or_404(episode_id, session)
+    validate_status_or_400(episode, "postprocess_status")
 
-    combined_srt = _get_combined_srt_or_404(episode_id)
+    combined_srt = get_combined_srt_or_404(episode_id, app_dir)
     try:
         with open(combined_srt, "r", encoding="utf-8") as file:
             srt_content = file.read()
@@ -525,10 +492,10 @@ def get_annotated_srt(episode_id: str, session: SessionDep) -> AnnotatedSrtConte
 )
 def update_annotated_srt(episode_id: str, annotated_srt: AnnotatedSrtContent, session: SessionDep) -> AnnotatedSrtContent:
     """Updates annotated SRT with speaker information"""
-    episode = _get_episode_or_404(episode_id, session)
-    _validate_status_or_400(episode, "postprocess_status")
+    episode = get_episode_or_404(episode_id, session)
+    validate_status_or_400(episode, "postprocess_status")
 
-    combined_srt = _get_combined_srt_or_404(episode_id)
+    combined_srt = get_combined_srt_or_404(episode_id, app_dir)
 
     try:
         with open(combined_srt, "w", encoding="utf-8") as file:
@@ -556,8 +523,8 @@ def generate_episode_metadata(episode_id: str, session: SessionDep) -> list[str]
     """
     Generate metadata for an episode including chapters and show notes based on the annotated SRT file.
     """
-    episode = _get_episode_or_404(episode_id, session)
-    _validate_status_or_400(episode, "postprocess_status")
+    episode = get_episode_or_404(episode_id, session)
+    validate_status_or_400(episode, "postprocess_status")
 
     episode.metadata_generation_status = JobStatus.processing
     session.commit()
@@ -567,8 +534,8 @@ def generate_episode_metadata(episode_id: str, session: SessionDep) -> list[str]
     metadata_dir = episode_dir / "metadata"
     metadata_dir.mkdir(exist_ok=True, parents=True)
 
-    srt_file = _get_combined_srt_or_404(episode_id)
-    combined_audio = _get_post_combined_audio_or_404(episode_id)
+    srt_file = get_combined_srt_or_404(episode_id, app_dir)
+    combined_audio = get_post_combined_audio_or_404(episode_id, app_dir)
 
     try:
         generate_metadata(source_file=srt_file, audio_file=combined_audio, output_dir=metadata_dir)
@@ -594,8 +561,8 @@ def generate_episode_metadata(episode_id: str, session: SessionDep) -> list[str]
 )
 def get_metadata_audio(episode_id: str, session: SessionDep) -> FileResponse:
     """Get the audio file for an episode"""
-    episode = _get_episode_or_404(episode_id, session)
-    _validate_status_or_400(episode, "metadata_generation_status")
+    episode = get_episode_or_404(episode_id, session)
+    validate_status_or_400(episode, "metadata_generation_status")
 
     metadata_dir = app_dir / "episodes" / episode_id / "metadata"
     if not metadata_dir.exists():
@@ -619,8 +586,8 @@ def get_metadata_audio(episode_id: str, session: SessionDep) -> FileResponse:
 )
 def get_chapter_info(episode_id: str, session: SessionDep) -> str:
     """Get chapter information for an episode"""
-    episode = _get_episode_or_404(episode_id, session)
-    _validate_status_or_400(episode, "metadata_generation_status")
+    episode = get_episode_or_404(episode_id, session)
+    validate_status_or_400(episode, "metadata_generation_status")
 
     metadata_dir = app_dir / "episodes" / episode_id / "metadata"
     if not metadata_dir.exists():
@@ -649,8 +616,8 @@ def get_chapter_info(episode_id: str, session: SessionDep) -> str:
 )
 def get_show_notes(episode_id: str, session: SessionDep) -> str:
     """Get show notes for an episode"""
-    episode = _get_episode_or_404(episode_id, session)
-    _validate_status_or_400(episode, "metadata_generation_status")
+    episode = get_episode_or_404(episode_id, session)
+    validate_status_or_400(episode, "metadata_generation_status")
 
     metadata_dir = app_dir / "episodes" / episode_id / "metadata"
     if not metadata_dir.exists():
@@ -686,8 +653,8 @@ export_router = APIRouter(tags=["v1_export"])
 )
 def initiate_export(episode_id: str, background_tasks: BackgroundTasks, session: SessionDep) -> Episode:
     """Initiate export of processed episode files"""
-    episode = _get_episode_or_404(episode_id, session)
-    _validate_status_or_400(episode, "metadata_generation_status")
+    episode = get_episode_or_404(episode_id, session)
+    validate_status_or_400(episode, "metadata_generation_status")
 
     job = ProcessingJob(episode_id=episode.uuid, type=JobType.export, status=JobStatus.pending)
     session.add(job)
@@ -733,7 +700,7 @@ def run_export(job_id: int, episode_uuid: str, session: SessionDep) -> None:
                 for file_path in metadata_dir.glob("*.*"):
                     zipf.write(file_path, arcname=file_path.name)
 
-            srt_file = _get_combined_srt_or_404(episode_uuid)
+            srt_file = get_combined_srt_or_404(episode_uuid, app_dir)
             if srt_file.exists():
                 zipf.write(srt_file, arcname=srt_file.name)
 
@@ -759,8 +726,8 @@ def run_export(job_id: int, episode_uuid: str, session: SessionDep) -> None:
 )
 def download_export(episode_id: str, session: SessionDep) -> FileResponse:
     """Download the exported zip file for an episode"""
-    episode = _get_episode_or_404(episode_id, session)
-    _validate_status_or_400(episode, "export_status")
+    episode = get_episode_or_404(episode_id, session)
+    validate_status_or_400(episode, "export_status")
 
     export_dir = app_dir / "episodes" / episode_id / "export"
     if not export_dir.exists():
@@ -774,63 +741,6 @@ def download_export(episode_id: str, session: SessionDep) -> FileResponse:
     return FileResponse(
         path=zip_file, media_type="application/zip", filename=zip_file.name, headers={"Content-Disposition": f"attachment; filename={zip_file.name}"}
     )
-
-
-#####################################
-# MARK: Helper functions
-#####################################
-
-
-def _get_episode_or_404(episode_id: str, session: Session) -> Episode:
-    """Get an episode by ID or raise a 404 error if not found"""
-    episode = session.get(Episode, episode_id)
-    if not episode:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
-
-    return episode
-
-
-def _validate_status_or_400(episode: Episode, status_field: str) -> None:
-    """Check if a specific status is completed for an episode"""
-    target_status = getattr(episode, status_field)
-    if target_status != JobStatus.completed:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Episode {status_field} is not completed. Current status: {target_status}")
-
-
-def _get_combined_file(files: List[Path]) -> Path:
-    """Get the combined file from a list of files"""
-    combined_file = None
-    for file in files:
-        file_prefix = file.stem
-        if "-" not in file_prefix:
-            combined_file = file
-            break
-    if combined_file is None:
-        combined_file = files[0]
-
-    return combined_file
-
-
-def _get_post_combined_audio_or_404(episode_id: str) -> Path:
-    """Get the combined audio file for an episode"""
-    episode_dir = app_dir / "episodes" / episode_id
-    audio_dir = episode_dir / "postprocessed"
-    audio_files = list(audio_dir.glob("*.wav"))
-    if not audio_files:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Edited audio file not found")
-
-    return _get_combined_file(audio_files)
-
-
-def _get_combined_srt_or_404(episode_id: str) -> Path:
-    """Get the combined SRT file for an episode"""
-    episode_dir = app_dir / "episodes" / episode_id
-    postprocessed_dir = episode_dir / "postprocessed"
-    srt_files = list(postprocessed_dir.glob("*.srt"))
-    if not srt_files:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SRT file not found")
-
-    return _get_combined_file(srt_files)
 
 
 #####################################

@@ -557,6 +557,19 @@ def test_delete_episode(session: Session, client: TestClient) -> None:
     assert deleted_episode is None
 
 
+def test_create_security(client: TestClient) -> None:
+    """Test security of create endpoint."""
+    response = client.post("/v1/episodes/", json={"title": "Test Episode"})
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    with TemporaryDirectory() as temp_dir:
+        audio_file = Path(temp_dir) / ".test.wav"
+        audio_file.write_bytes(b"Dummy audio data")
+        with open(audio_file, "rb") as f:
+            response = client.post("/v1/episodes/", files={"audio": ("test.wav", f, "audio/wav")})
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
 def test_nonexistent_episode(client: TestClient) -> None:
     """Test operations on a non-existent episode."""
     response = client.get("/v1/episodes/nonexistent-id")
