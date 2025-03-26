@@ -514,6 +514,66 @@ def test_postprocess_preprocessing_incomplete(session: Session, postprocessed_cl
     assert response.status_code == 400
 
 
+#####################################
+# MARK: Transcription Management tests
+#####################################
+
+
+def test_get_and_update_annotated_srt(postprocessed_client: TestClient) -> None:
+    """Test retrieving annotated SRT for a postprocessed episode."""
+    episodes = postprocessed_client.get("/v1/episodes/").json()
+    assert len(episodes) > 0
+    episode_id = episodes[0]["uuid"]
+
+    response = postprocessed_client.get(f"/v1/episodes/{episode_id}/annotated-srt")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert "content" in data
+    assert isinstance(data["content"], str)
+    assert len(data["content"]) > 0
+
+    # Check for expected content from our fixture
+    assert "This is a postprocessed transcript." in data["content"]
+    assert "For testing purposes only." in data["content"]
+
+    updated_content = "UPDATED"
+    update_response = postprocessed_client.put(f"/v1/episodes/{episode_id}/annotated-srt", json={"content": updated_content})
+    assert update_response.status_code == 200
+
+    # Get the SRT content again to confirm persistence
+    get_response_after = postprocessed_client.get(f"/v1/episodes/{episode_id}/annotated-srt")
+    assert get_response_after.status_code == 200
+    after_content = get_response_after.json()["content"]
+    assert after_content == updated_content
+
+
+def test_transcription_management_invalid_episode(postprocessed_client: TestClient) -> None:
+    """Test transcription management endpoints with non-existent episode."""
+    response = postprocessed_client.get("/v1/episodes/nonexistent-id/annotated-srt")
+    assert response.status_code == 404
+
+    response = postprocessed_client.put("/v1/episodes/nonexistent-id/annotated-srt", json={"content": "Test content"})
+    assert response.status_code == 404
+
+
+def test_transcription_management_preprocessing_incomplete(session: Session, postprocessed_client: TestClient) -> None:
+    """Test transcription management endpoints when postprocessing is not complete."""
+    episode = Episode(title="Test Episode", preprocess_status=JobStatus.completed, postprocess_status=JobStatus.pending)
+    session.add(episode)
+    session.commit()
+
+    episode_id = episode.uuid
+
+    # Test getting SRT before postprocessing is complete
+    response = postprocessed_client.get(f"/v1/episodes/{episode_id}/annotated-srt")
+    assert response.status_code == 400
+
+    # Test updating SRT before postprocessing is complete
+    response = postprocessed_client.put(f"/v1/episodes/{episode_id}/annotated-srt", json={"content": "Test content"})
+    assert response.status_code == 400
+
+
 ##################################
 # MARK: Episode creation tests
 ##################################
