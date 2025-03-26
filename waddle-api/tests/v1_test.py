@@ -586,7 +586,6 @@ def test_get_and_update_annotated_srt(postprocessed_client: TestClient) -> None:
     assert isinstance(data["content"], str)
     assert len(data["content"]) > 0
 
-    # Check for expected content from our fixture
     assert "This is a postprocessed transcript." in data["content"]
     assert "For testing purposes only." in data["content"]
 
@@ -594,7 +593,6 @@ def test_get_and_update_annotated_srt(postprocessed_client: TestClient) -> None:
     update_response = postprocessed_client.put(f"/v1/episodes/{episode_id}/annotated-srt", json={"content": updated_content})
     assert update_response.status_code == 200
 
-    # Get the SRT content again to confirm persistence
     get_response_after = postprocessed_client.get(f"/v1/episodes/{episode_id}/annotated-srt")
     assert get_response_after.status_code == 200
     after_content = get_response_after.json()["content"]
