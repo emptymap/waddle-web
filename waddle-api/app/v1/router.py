@@ -523,87 +523,78 @@ def _check_metadata_or_400(episode: Episode) -> None:
     status_code=status.HTTP_202_ACCEPTED,
     responses={
         status.HTTP_404_NOT_FOUND: {"description": "Episode not found"},
-        status.HTTP_400_BAD_REQUEST: {"description": "Episode post-processing not completed"},
+        status.HTTP_400_BAD_REQUEST: {"description": "Episode preprocessing not completed"},
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "Internal server error"},
     },
 )
-def generate_episode_metadata(episode_id: str, background_tasks: BackgroundTasks, session: SessionDep) -> Episode:
+def generate_episode_metadata(episode_id: str, session: SessionDep) -> list[str]:
     """
-    Generate metadata for an episode including chapters and show notes
-    based on the annotated SRT file.
+    Generate metadata for an episode including chapters and show notes based on the annotated SRT file.
     """
     episode = _get_episode_or_404(episode_id, session)
     _check_postprocessed_or_400(episode)
 
-    # Create a new processing job for metadata generation
-    job = ProcessingJob(episode_id=episode.uuid, type=JobType.metadata, status=JobStatus.pending)
-    session.add(job)
-    session.commit()
-    session.refresh(job)
-
-    # Start the background task
-    background_tasks.add_task(run_metadata_generation, job_id=job.id, episode_uuid=episode_id, db=session)
-
-    episode.metadata_generation_status = JobStatus.pending
-    session.add(episode)
+    episode.metadata_generation_status = JobStatus.processing
     session.commit()
     session.refresh(episode)
 
-    return episode
+    episode_dir: Path = app_dir / "episodes" / episode_id
+    metadata_dir = episode_dir / "metadata"
+    metadata_dir.mkdir(exist_ok=True, parents=True)
 
+    srt_file = _get_combined_srt_or_404(episode_id)
 
-def run_metadata_generation(job_id: int, episode_uuid: str, db: Session) -> None:
-    """Background task to run metadata generation"""
-    job = db.get(ProcessingJob, job_id)
-    if not job:
-        return
+    postprocessed_dir = episode_dir / "postprocessed"
+    audio_files = list(postprocessed_dir.glob("*.wav"))
 
-    episode = db.get(Episode, episode_uuid)
-    if not episode:
-        return
+    audio_file = None
+    if audio_files:
+        combined_audio = None
+        for audio in audio_files:
+            audio_prefix = audio.stem
+            if "-" not in audio_prefix:
+                combined_audio = audio
+                break
+        audio_file = combined_audio or audio_files[0]
 
-    episode.metadata_generation_status = JobStatus.processing
-    job.status = JobStatus.processing
-    db.commit()
-    db.refresh(episode)
-    db.refresh(job)
-
+    # Generate metadata
     try:
-        episode_dir = app_dir / "episodes" / episode_uuid
-        metadata_dir = episode_dir / "metadata"
-        metadata_dir.mkdir(exist_ok=True, parents=True)
-
-        # Get the source SRT file
-        srt_file = _get_combined_srt_or_404(episode_uuid)
-
-        # Get the audio file
-        postprocessed_dir = episode_dir / "postprocessed"
-        audio_files = list(postprocessed_dir.glob("*.wav"))
-        audio_file = None
-
-        if audio_files:
-            combined_audio = None
-            for audio in audio_files:
-                audio_prefix = audio.stem
-                if "-" not in audio_prefix:
-                    combined_audio = audio
-                    break
-            audio_file = combined_audio or audio_files[0]
-
-        # Generate metadata
         generate_metadata(source_file=srt_file, audio_file=audio_file, output_dir=metadata_dir)
-
         episode.metadata_generation_status = JobStatus.completed
-        job.status = JobStatus.completed
     except Exception as e:
         episode.metadata_generation_status = JobStatus.failed
-        job.status = JobStatus.failed
-        job.error_message = str(e)
+        episode.error_message = str(e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error generating metadata: {str(e)}") from e
     finally:
-        db.commit()
-        db.refresh(episode)
-        db.refresh(job)
-        db.close()
+        session.commit()
+        session.refresh(episode)
+
+    generated_paths = list(metadata_dir.glob("*"))
+    return [generated_path.name for generated_path in generated_paths]
+
+
+@metadata_router.get(
+    "/episodes/{episode_id}/metadata-audio",
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Episode or audio file not found"},
+        status.HTTP_400_BAD_REQUEST: {"description": "Metadata generation not completed"},
+    },
+)
+def get_metadata_audio(episode_id: str, session: SessionDep) -> FileResponse:
+    """Get the audio file for an episode"""
+    episode = _get_episode_or_404(episode_id, session)
+    _check_metadata_or_400(episode)
+
+    metadata_dir = app_dir / "episodes" / episode_id / "metadata"
+    if not metadata_dir.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Metadata directory not found")
+
+    audio_files = list(metadata_dir.glob("*.wav"))
+    if not audio_files:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audio file not found")
+
+    audio_file = audio_files[0]
+    return FileResponse(path=audio_file, media_type="audio/wav", filename=audio_file.name)
 
 
 @metadata_router.get(
@@ -623,7 +614,6 @@ def get_chapter_info(episode_id: str, session: SessionDep) -> str:
     if not metadata_dir.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Metadata directory not found")
 
-    # Look for chapter file
     chapter_files = list(metadata_dir.glob("*.chapters.txt"))
     if not chapter_files:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chapter file not found")
