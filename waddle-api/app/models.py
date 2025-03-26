@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
@@ -21,34 +21,56 @@ class Episode(SQLModel, table=True):
 
     uuid: str = Field(default_factory=generate, primary_key=True)
     preprocess_status: JobStatus = Field(default=JobStatus.init)
+    edit_status: JobStatus = Field(default=JobStatus.init)
     postprocess_status: JobStatus = Field(default=JobStatus.init)
     metadata_generation_status: JobStatus = Field(default=JobStatus.init)
+    export_status: JobStatus = Field(default=JobStatus.init)
     editor_state: str = Field(default="")
-    title: str = Field(default="")
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)
+    title: str = Field(default="", max_length=100)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), sa_column_kwargs={"onupdate": lambda: datetime.now(timezone.utc)})
 
 
-class CreateEpisodeRequest(SQLModel):
-    """Model for creating a new episode"""
+class EpisodeSortBy(str, Enum):
+    created_at = "created_at"
+    updated_at = "updated_at"
 
-    title: str
+
+class SortOrder(str, Enum):
+    asc = "asc"
+    desc = "desc"
+
+
+class EpisodeFilterParams(SQLModel):
+    """Model for filtering episodes"""
+
+    offset: int = Field(0, ge=0, description="Offset the number of episodes returned")
+    limit: int = Field(100, gt=0, le=100, description="Limit the number of episodes returned")
+    sort_by: str = Field(EpisodeSortBy.created_at, description="Sort episodes by (created_at or updated_at)")
+    sort_order: SortOrder = Field(SortOrder.desc, description="Sort order (asc or desc)")
+    title: Optional[str] = Field(None, description="Filter by title (partial match)")
+    preprocess_status: Optional[JobStatus] = Field(None, description="Filter by preprocess status")
+    edit_status: Optional[JobStatus] = Field(None, description="Filter by edit status")
+    postprocess_status: Optional[JobStatus] = Field(None, description="Filter by postprocess status")
+    metadata_generation_status: Optional[JobStatus] = Field(None, description="Filter by metadata generation status")
+    export_status: Optional[JobStatus] = Field(None, description="Filter by export status")
 
 
 class UpdateEpisodeRequest(SQLModel):
     """Model for updating an existing episode"""
 
-    title: Optional[str] = None
-    editor_state: Optional[str] = None
+    title: Optional[str] = Field(None, max_length=100)
+    editor_state: Optional[str] = Field(None)
 
 
 class JobType(str, Enum):
     """Enum for processing job types"""
 
     preprocess = "preprocess"
+    edit = "edit"
     postprocess = "postprocess"
     metadata = "metadata"
-    audio_edit = "audio_edit"
+    export = "export"
 
 
 class ProcessingJob(SQLModel, table=True):
@@ -61,3 +83,9 @@ class ProcessingJob(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
     error_message: Optional[str] = None
+
+
+class AnnotatedSrtContent(SQLModel):
+    """Model for annotated SRT content with speaker information"""
+
+    content: str
