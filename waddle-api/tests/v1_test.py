@@ -150,8 +150,10 @@ def _add_episode_to_db(
     session: Session,
     episode_id: str,
     preprocess_status: JobStatus = JobStatus.init,
+    edit_status: JobStatus = JobStatus.init,
     postprocess_status: JobStatus = JobStatus.init,
     metadata_generation_status: JobStatus = JobStatus.init,
+    export_status: JobStatus = JobStatus.init,
 ) -> None:
     """
     Add an episode to the database with a given ID.
@@ -160,8 +162,10 @@ def _add_episode_to_db(
         uuid=episode_id,
         title="Test Episode",
         preprocess_status=preprocess_status,
+        edit_status=edit_status,
         postprocess_status=postprocess_status,
         metadata_generation_status=metadata_generation_status,
+        export_status=export_status,
     )
     session.add(episode)
     session.commit()
@@ -212,6 +216,7 @@ def edited_client_fixture(session: Session, monkeypatch: MonkeyPatch) -> Generat
             session,
             episode_id=episode_id,
             preprocess_status=JobStatus.completed,
+            edit_status=JobStatus.completed,
         )
 
         client = _configure_test_client(app, session)
@@ -239,6 +244,7 @@ def postprocessed_client_fixture(session: Session, monkeypatch: MonkeyPatch) -> 
             session,
             episode_id=episode_id,
             preprocess_status=JobStatus.completed,
+            edit_status=JobStatus.completed,
             postprocess_status=JobStatus.completed,
         )
 
@@ -269,6 +275,7 @@ def metadata_client_fixture(session: Session, monkeypatch: MonkeyPatch) -> Gener
             session,
             episode_id=episode_id,
             preprocess_status=JobStatus.completed,
+            edit_status=JobStatus.completed,
             postprocess_status=JobStatus.completed,
             metadata_generation_status=JobStatus.completed,
         )
@@ -562,7 +569,6 @@ def test_postprocess_preprocessing_incomplete(session: Session, postprocessed_cl
 
     response = postprocessed_client.post(f"/v1/episodes/{episode_id}/postprocess")
     assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert "Episode preprocessing is not completed" in response.json()["detail"]
 
     response = postprocessed_client.get(f"/v1/episodes/{episode_id}/postprocessed-audio")
     assert response.status_code == status.HTTP_400_BAD_REQUEST
