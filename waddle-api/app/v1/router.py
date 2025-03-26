@@ -277,7 +277,7 @@ def apply_audio_edits(episode_id: str, session: SessionDep) -> list[str]:
     if not edited_files:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No audio files found")
 
-    combine_audio_path = episode_dir / "combined.wav"
+    combine_audio_path = episode_dir / "edited-combined.wav"
     combine_audio_files(edited_files, combine_audio_path)
 
     return [file_path.name for file_path in edited_dir.glob("*.wav")]
@@ -292,7 +292,7 @@ def get_edited_audio_files(episode_id: str, session: SessionDep) -> FileResponse
 
     # Check combined audio file exists
     episode_dir = app_dir / "episodes" / episode_id
-    edited_combine_path = episode_dir / "combined.wav"
+    edited_combine_path = episode_dir / "edited-combined.wav"
     if not edited_combine_path.exists():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Edit audio is not completed")
 
