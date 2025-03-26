@@ -596,3 +596,13 @@ def test_process_all(session: Session, client: TestClient, monkeypatch: MonkeyPa
 
         postprocessed_srt_files = list((episode_dir / "postprocessed").glob("*.srt"))
         assert len(postprocessed_srt_files) > 0
+
+        response = client.get(f"/v1/episodes/{data['uuid']}/postprocessed-audio")
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "audio/wav"
+        assert len(response.content) > 0
+
+        # Check transcription management
+        response = client.get(f"/v1/episodes/{data['uuid']}/annotated-srt")
+        assert response.status_code == 200
+        assert len(response.content) > 0
