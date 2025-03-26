@@ -714,13 +714,10 @@ def get_show_notes(episode_id: str, session: SessionDep) -> str:
 export_router = APIRouter(tags=["export"])
 
 
-def _check_metadata_or_400(episode: Episode) -> None:
-    """Check if metadata generation is completed for an episode"""
-    if episode.metadata_generation_status != JobStatus.completed:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Episode metadata generation is not completed. Current status: {episode.metadata_generation_status}",
-        )
+def _check_export_or_400(episode: Episode) -> None:
+    """Check if export is completed for an episode"""
+    if episode.export_status != JobStatus.completed:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Episode export is not completed. Current status: {episode.export_status}")
 
 
 @export_router.post(
@@ -781,11 +778,11 @@ def run_export(job_id: int, episode_uuid: str, session: SessionDep) -> None:
             metadata_dir = episode_dir / "metadata"
             if metadata_dir.exists():
                 for file_path in metadata_dir.glob("*.*"):
-                    zipf.write(file_path)
+                    zipf.write(file_path, arcname=file_path.name)
 
             srt_file = _get_combined_srt_or_404(episode_uuid)
             if srt_file.exists():
-                zipf.write(srt_file)
+                zipf.write(srt_file, arcname=srt_file.name)
 
         episode.export_status = JobStatus.completed
         job.status = JobStatus.completed
@@ -810,16 +807,12 @@ def run_export(job_id: int, episode_uuid: str, session: SessionDep) -> None:
 def download_export(episode_id: str, session: SessionDep) -> FileResponse:
     """Download the exported zip file for an episode"""
     episode = _get_episode_or_404(episode_id, session)
-
-    # Check if export is completed
-    if episode.export_status != JobStatus.completed:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Episode export is not completed. Current status: {episode.export_status}")
+    _check_export_or_400(episode)
 
     export_dir = app_dir / "episodes" / episode_id / "export"
     if not export_dir.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export directory not found")
 
-    # Look for zip files
     zip_files = list(export_dir.glob("*.zip"))
     if not zip_files:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export zip file not found")
