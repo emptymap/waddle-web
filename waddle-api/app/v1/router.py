@@ -1,4 +1,5 @@
 import shutil
+import zipfile
 from pathlib import Path
 from typing import Annotated, List
 
@@ -47,9 +48,12 @@ def read_episodes(
     },
 )
 async def create_episode(
-    files: list[UploadFile], db: SessionDep, background_tasks: BackgroundTasks, title: Annotated[str, Form(description="Episode title")] = ""
+    files: list[UploadFile], session: SessionDep, background_tasks: BackgroundTasks, title: Annotated[str, Form(description="Episode title")] = ""
 ) -> Episode:
     new_episode = Episode(title=title, preprocess_status=JobStatus.pending)
+    session.add(new_episode)
+    session.commit()
+    session.refresh(new_episode)
 
     storage_path = app_dir / "episodes" / new_episode.uuid
     storage_path.mkdir(parents=True, exist_ok=True)
@@ -64,30 +68,30 @@ async def create_episode(
             with open(file_path, "wb") as f:
                 content = await file.read()
                 f.write(content)
-        db.add(new_episode)
+        session.add(new_episode)
         job = ProcessingJob(episode_id=new_episode.uuid, type=JobType.preprocess, status=JobStatus.pending)
-        db.add(job)
-        db.commit()
+        session.add(job)
+        session.commit()
 
-        background_tasks.add_task(run_preprocessing, job.id, new_episode.uuid, db)
+        background_tasks.add_task(run_preprocessing, job.id, new_episode.uuid, session)
         return new_episode
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e
 
 
 # Background preprocessing task
-def run_preprocessing(job_id: int, episode_uuid: str, db: Session) -> None:
-    job = db.get(ProcessingJob, job_id)
+def run_preprocessing(job_id: int, episode_uuid: str, session: SessionDep) -> None:
+    job = session.get(ProcessingJob, job_id)
     if not job:
         return
-    episode = db.get(Episode, episode_uuid)
+    episode = session.get(Episode, episode_uuid)
     if not episode:
         return
     episode.preprocess_status = JobStatus.processing
     job.status = JobStatus.processing
-    db.commit()
-    db.refresh(episode)
-    db.refresh(job)
+    session.commit()
+    session.refresh(episode)
+    session.refresh(job)
     try:
         episode_dir = app_dir / "episodes" / episode_uuid
         preprocess_multi_files(reference=None, source_dir=episode_dir / "source", output_dir=episode_dir / "preprocessed", transcribe=True)
@@ -98,10 +102,10 @@ def run_preprocessing(job_id: int, episode_uuid: str, db: Session) -> None:
         job.status = JobStatus.failed
         job.error_message = str(e)
     finally:
-        db.commit()
-        db.refresh(episode)
-        db.refresh(job)
-        db.close()
+        session.commit()
+        session.refresh(episode)
+        session.refresh(job)
+        session.close()
 
 
 def _get_episode_or_404(episode_id: str, session: Session) -> Episode:
@@ -250,6 +254,12 @@ def get_transcription(episode_id: str, session: SessionDep) -> str:
 audio_editing_router = APIRouter(tags=["audio_editing"])
 
 
+def _check_edited_or_400(episode: Episode) -> None:
+    """Check if audio editing is completed for an episode"""
+    if episode.edit_status != JobStatus.completed:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Episode audio editing is not completed. Current status: {episode.edit_status}")
+
+
 @audio_editing_router.post(
     "/episodes/{episode_id}/audio-edits",
     status_code=status.HTTP_200_OK,
@@ -273,26 +283,26 @@ def apply_audio_edits(episode_id: str, session: SessionDep, background_tasks: Ba
     session.refresh(job)
     session.refresh(episode)
 
-    background_tasks.add_task(run_editing, job_id=job.id, episode_uuid=episode_id, db=session)
+    background_tasks.add_task(run_editing, job_id=job.id, episode_uuid=episode_id, session=session)
 
     return episode
 
 
-def run_editing(job_id: int, episode_uuid: str, db: Session) -> None:
+def run_editing(job_id: int, episode_uuid: str, session: SessionDep) -> None:
     """Background task to run audio editing"""
-    job = db.get(ProcessingJob, job_id)
+    job = session.get(ProcessingJob, job_id)
     if not job:
         return
 
-    episode = db.get(Episode, episode_uuid)
+    episode = session.get(Episode, episode_uuid)
     if not episode:
         return
 
     episode.edit_status = JobStatus.processing
     job.status = JobStatus.processing
-    db.commit()
-    db.refresh(episode)
-    db.refresh(job)
+    session.commit()
+    session.refresh(episode)
+    session.refresh(job)
 
     try:
         episode_dir = app_dir / "episodes" / episode_uuid
@@ -320,10 +330,10 @@ def run_editing(job_id: int, episode_uuid: str, db: Session) -> None:
         job.status = JobStatus.failed
         job.error_message = str(e)
     finally:
-        db.commit()
-        db.refresh(episode)
-        db.refresh(job)
-        db.close()
+        session.commit()
+        session.refresh(episode)
+        session.refresh(job)
+        session.close()
 
 
 @audio_editing_router.get(
@@ -331,9 +341,9 @@ def run_editing(job_id: int, episode_uuid: str, db: Session) -> None:
 )
 def get_edited_audio_files(episode_id: str, session: SessionDep) -> FileResponse:
     """Get the final edited audio file"""
-    _get_episode_or_404(episode_id, session)
+    episode = _get_episode_or_404(episode_id, session)
+    _check_edited_or_400(episode)
 
-    # Check combined audio file exists
     episode_dir = app_dir / "episodes" / episode_id
     edited_combine_path = episode_dir / "edited-combined.wav"
     if not edited_combine_path.exists():
@@ -368,16 +378,14 @@ def _check_postprocessed_or_400(episode: Episode) -> None:
 def initiate_postprocess(episode_id: str, background_tasks: BackgroundTasks, session: SessionDep) -> Episode:
     """Initiate post-processing for an episode using its current editor state"""
     episode = _get_episode_or_404(episode_id, session)
-    _check_preprocessed_or_400(episode)
+    _check_edited_or_400(episode)
 
-    # Create a new processing job for post-processing
     job = ProcessingJob(episode_id=episode.uuid, type=JobType.postprocess, status=JobStatus.pending)
     session.add(job)
     session.commit()
     session.refresh(job)
 
-    # Start the background task
-    background_tasks.add_task(run_postprocessing, job_id=job.id, episode_uuid=episode_id, db=session)
+    background_tasks.add_task(run_postprocessing, job_id=job.id, episode_uuid=episode_id, session=session)
 
     episode.postprocess_status = JobStatus.pending
     session.add(episode)
@@ -387,21 +395,21 @@ def initiate_postprocess(episode_id: str, background_tasks: BackgroundTasks, ses
     return episode
 
 
-def run_postprocessing(job_id: int, episode_uuid: str, db: Session) -> None:
+def run_postprocessing(job_id: int, episode_uuid: str, session: SessionDep) -> None:
     """Background task to run post-processing"""
-    job = db.get(ProcessingJob, job_id)
+    job = session.get(ProcessingJob, job_id)
     if not job:
         return
 
-    episode = db.get(Episode, episode_uuid)
+    episode = session.get(Episode, episode_uuid)
     if not episode:
         return
 
     episode.postprocess_status = JobStatus.processing
     job.status = JobStatus.processing
-    db.commit()
-    db.refresh(episode)
-    db.refresh(job)
+    session.commit()
+    session.refresh(episode)
+    session.refresh(job)
 
     try:
         episode_dir = app_dir / "episodes" / episode_uuid
@@ -418,10 +426,10 @@ def run_postprocessing(job_id: int, episode_uuid: str, db: Session) -> None:
         job.status = JobStatus.failed
         job.error_message = str(e)
     finally:
-        db.commit()
-        db.refresh(episode)
-        db.refresh(job)
-        db.close()
+        session.commit()
+        session.refresh(episode)
+        session.refresh(job)
+        session.close()
 
 
 @postprocess_router.get(
@@ -700,6 +708,124 @@ def get_show_notes(episode_id: str, session: SessionDep) -> str:
 
 
 #####################################
+# MARK: Export endpoints
+#####################################
+export_router = APIRouter(tags=["export"])
+
+
+def _check_metadata_or_400(episode: Episode) -> None:
+    """Check if metadata generation is completed for an episode"""
+    if episode.metadata_generation_status != JobStatus.completed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Episode metadata generation is not completed. Current status: {episode.metadata_generation_status}",
+        )
+
+
+@export_router.post(
+    "/episodes/{episode_id}/export",
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Episode not found"},
+        status.HTTP_400_BAD_REQUEST: {"description": "Episode post-processing not completed"},
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "Internal server error"},
+    },
+)
+def initiate_export(episode_id: str, background_tasks: BackgroundTasks, session: SessionDep) -> Episode:
+    """Initiate export of processed episode files"""
+    episode = _get_episode_or_404(episode_id, session)
+    _check_metadata_or_400(episode)
+
+    job = ProcessingJob(episode_id=episode.uuid, type=JobType.export, status=JobStatus.pending)
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+
+    background_tasks.add_task(run_export, job_id=job.id, episode_uuid=episode_id, session=session)
+
+    episode.export_status = JobStatus.pending
+    session.add(episode)
+    session.commit()
+    session.refresh(episode)
+
+    return episode
+
+
+def run_export(job_id: int, episode_uuid: str, session: SessionDep) -> None:
+    """Background task to run export compression"""
+    job = session.get(ProcessingJob, job_id)
+    if not job:
+        return
+
+    episode = session.get(Episode, episode_uuid)
+    if not episode:
+        return
+
+    episode.export_status = JobStatus.processing
+    job.status = JobStatus.processing
+    session.commit()
+    session.refresh(episode)
+    session.refresh(job)
+
+    try:
+        episode_dir = app_dir / "episodes" / episode_uuid
+        export_dir = episode_dir / "export"
+        if export_dir.exists():
+            # Remove existing export directory, for if title changes
+            shutil.rmtree(export_dir)
+        export_dir.mkdir(parents=True)
+        zip_path = episode_dir / f"{episode.title or 'episode'}.zip"
+
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+            metadata_dir = episode_dir / "metadata"
+            if metadata_dir.exists():
+                for file_path in metadata_dir.glob("*.*"):
+                    zipf.write(file_path, arcname=f"audio/{file_path.name}")
+
+        episode.export_status = JobStatus.completed
+        job.status = JobStatus.completed
+    except Exception as e:
+        episode.export_status = JobStatus.failed
+        job.status = JobStatus.failed
+        job.error_message = str(e)
+    finally:
+        session.commit()
+        session.refresh(episode)
+        session.refresh(job)
+        session.close()
+
+
+@export_router.get(
+    "/episodes/{episode_id}/export",
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Export not found or episode not found"},
+        status.HTTP_400_BAD_REQUEST: {"description": "Export not completed"},
+    },
+)
+def download_export(episode_id: str, session: SessionDep) -> FileResponse:
+    """Download the exported zip file for an episode"""
+    episode = _get_episode_or_404(episode_id, session)
+
+    # Check if export is completed
+    if episode.export_status != JobStatus.completed:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Episode export is not completed. Current status: {episode.export_status}")
+
+    export_dir = app_dir / "episodes" / episode_id / "export"
+    if not export_dir.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export directory not found")
+
+    # Look for zip files
+    zip_files = list(export_dir.glob("*.zip"))
+    if not zip_files:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export zip file not found")
+
+    zip_file = zip_files[0]  # Get the first zip file (there should only be one)
+    return FileResponse(
+        path=zip_file, media_type="application/zip", filename=zip_file.name, headers={"Content-Disposition": f"attachment; filename={zip_file.name}"}
+    )
+
+
+#####################################
 # MARK: Include routers
 #####################################
 v1_router.include_router(episodes_router)
@@ -708,3 +834,4 @@ v1_router.include_router(audio_editing_router)
 v1_router.include_router(postprocess_router)
 v1_router.include_router(transcription_router)
 v1_router.include_router(metadata_router)
+v1_router.include_router(export_router)
