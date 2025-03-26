@@ -1,5 +1,6 @@
 import io
 import urllib.parse
+import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import BinaryIO, Generator, List, Tuple
@@ -146,6 +147,17 @@ def _add_metadata(episode_dir: Path) -> None:
         f.write("- [Example Link](https://example.com)\n")
 
 
+def _add_export(episode_dir: Path) -> None:
+    """
+    Add export files to the episode directory.
+    """
+    export_dir = episode_dir / "export"
+    export_dir.mkdir(exist_ok=True)
+    zip_path = export_dir / "Test Episode.zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+        zipf.writestr("dummy.txt", "This is a dummy file for testing.")
+
+
 def _add_episode_to_db(
     session: Session,
     episode_id: str,
@@ -174,9 +186,8 @@ def _add_episode_to_db(
 @pytest.fixture(name="preprocessed_client")
 def preprocessed_client_fixture(session: Session, monkeypatch: MonkeyPatch) -> Generator[TestClient]:
     """
-    Create a test client with a pre-populated episode similar to test_create_episode_with_wavs.
+    After preprocessed client.
     """
-    # Create a temporary directory for testing
     with TemporaryDirectory() as temp_dir:
         temp_dir_path = Path(temp_dir)
         monkeypatch.setattr("app.v1.router.app_dir", temp_dir_path)
@@ -200,7 +211,7 @@ def preprocessed_client_fixture(session: Session, monkeypatch: MonkeyPatch) -> G
 @pytest.fixture(name="edited_client")
 def edited_client_fixture(session: Session, monkeypatch: MonkeyPatch) -> Generator[TestClient]:
     """
-    Create a test client with a pre-populated episode that has completed the editing stage.
+    After edited client.
     """
     with TemporaryDirectory() as temp_dir:
         temp_dir_path = Path(temp_dir)
@@ -227,7 +238,7 @@ def edited_client_fixture(session: Session, monkeypatch: MonkeyPatch) -> Generat
 @pytest.fixture(name="postprocessed_client")
 def postprocessed_client_fixture(session: Session, monkeypatch: MonkeyPatch) -> Generator[TestClient]:
     """
-    Create a test client with a pre-populated episode that has completed the postprocessing stage.
+    After postprocessed client.
     """
     with TemporaryDirectory() as temp_dir:
         temp_dir_path = Path(temp_dir)
@@ -256,8 +267,7 @@ def postprocessed_client_fixture(session: Session, monkeypatch: MonkeyPatch) -> 
 @pytest.fixture(name="metadata_client")
 def metadata_client_fixture(session: Session, monkeypatch: MonkeyPatch) -> Generator[TestClient]:
     """
-    Create a test client with a pre-populated episode that has completed postprocessing
-    and is ready for metadata generation.
+    After metadata generation client
     """
     with TemporaryDirectory() as temp_dir:
         temp_dir_path = Path(temp_dir)
@@ -280,6 +290,38 @@ def metadata_client_fixture(session: Session, monkeypatch: MonkeyPatch) -> Gener
             metadata_generation_status=JobStatus.completed,
         )
 
+        client = _configure_test_client(app, session)
+        yield client
+        app.dependency_overrides.clear()
+
+
+@pytest.fixture(name="export_client")
+def export_client_fixture(session: Session, monkeypatch: MonkeyPatch) -> Generator[TestClient]:
+    """
+    After export client
+    """
+    with TemporaryDirectory() as temp_dir:
+        temp_dir_path = Path(temp_dir)
+        monkeypatch.setattr("app.v1.router.app_dir", temp_dir_path)
+
+        episode_id = "export-test-episode"
+        episode_dir = _get_episode_dir(temp_dir_path, episode_id)
+        _add_source(episode_dir)
+        _add_preprocessed(episode_dir)
+        _add_edited(episode_dir)
+        _add_postprocessed(episode_dir)
+        _add_metadata(episode_dir)
+        _add_export(episode_dir)
+
+        _add_episode_to_db(
+            session,
+            episode_id=episode_id,
+            preprocess_status=JobStatus.completed,
+            edit_status=JobStatus.completed,
+            postprocess_status=JobStatus.completed,
+            metadata_generation_status=JobStatus.completed,
+            export_status=JobStatus.completed,
+        )
         client = _configure_test_client(app, session)
         yield client
         app.dependency_overrides.clear()
@@ -698,6 +740,64 @@ def test_missing_files(metadata_client: TestClient, monkeypatch: MonkeyPatch) ->
         assert "Show notes file not found" in response.json()["detail"]
 
 
+#####################################
+# MARK: Export endpoints
+#####################################
+
+
+def test_download_export(export_client: TestClient) -> None:
+    """Test downloading an exported zip file."""
+    episodes = export_client.get("/v1/episodes/").json()
+    assert len(episodes) > 0
+    episode_id = episodes[0]["uuid"]
+
+    response = export_client.get(f"/v1/episodes/{episode_id}/export")
+    assert response.status_code == status.HTTP_200_OK
+    assert response.headers["content-type"] == "application/zip"
+    assert "content-disposition" in response.headers
+    assert f"filename={episodes[0]['title']}.zip" in response.headers["content-disposition"]
+
+
+def test_download_export_not_found(export_client: TestClient) -> None:
+    """Test downloading an export for a non-existent episode."""
+    response = export_client.get("/v1/episodes/nonexistent-id/export")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json()["detail"] == "Episode not found"
+
+
+def test_download_export_not_completed(session: Session, export_client: TestClient) -> None:
+    """Test downloading an export before the export is completed."""
+    episode = Episode(
+        title="Pending Export",
+        preprocess_status=JobStatus.completed,
+        edit_status=JobStatus.completed,
+        postprocess_status=JobStatus.completed,
+        metadata_generation_status=JobStatus.completed,
+        export_status=JobStatus.pending,
+    )
+    session.add(episode)
+    session.commit()
+
+    response = export_client.get(f"/v1/episodes/{episode.uuid}/export")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+def test_export_missing_metadata(session: Session, edited_client: TestClient) -> None:
+    """Test initiating export when metadata is not yet completed."""
+    episode = Episode(
+        title="Missing Metadata",
+        preprocess_status=JobStatus.completed,
+        edit_status=JobStatus.completed,
+        postprocess_status=JobStatus.completed,
+        metadata_generation_status=JobStatus.pending,
+    )
+    session.add(episode)
+    session.commit()
+
+    response = edited_client.post(f"/v1/episodes/{episode.uuid}/export")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
 ##################################
 # MARK: Episode creation tests
 ##################################
@@ -813,3 +913,11 @@ def test_process_all(session: Session, client: TestClient, monkeypatch: MonkeyPa
         content = response.content.decode("utf-8")
         print(content)
         assert "- [testurl](https://www.youtube.com/watch?v=1)" in content
+
+        # Export
+        response = client.post(f"/v1/episodes/{data['uuid']}/export")
+        assert response.status_code == status.HTTP_202_ACCEPTED
+
+        response = client.get(f"/v1/episodes/{data['uuid']}/export")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.headers["content-type"] == "application/zip"
