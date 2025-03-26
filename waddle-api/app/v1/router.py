@@ -279,6 +279,7 @@ def apply_audio_edits(episode_id: str, session: SessionDep, background_tasks: Ba
 
     episode.edit_status = JobStatus.pending
     session.add(episode)
+
     session.commit()
     session.refresh(job)
     session.refresh(episode)
@@ -774,7 +775,7 @@ def run_export(job_id: int, episode_uuid: str, session: SessionDep) -> None:
             # Remove existing export directory, for if title changes
             shutil.rmtree(export_dir)
         export_dir.mkdir(parents=True)
-        zip_path = episode_dir / f"{episode.title or 'episode'}.zip"
+        zip_path = export_dir / f"{episode.title or 'episode'}.zip"
 
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
             metadata_dir = episode_dir / "metadata"
