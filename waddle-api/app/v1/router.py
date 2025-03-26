@@ -208,7 +208,7 @@ def get_preprocessed_audio_files(episode_id: str, session: SessionDep) -> List[s
 
 
 @preprocess_resources_router.get(
-    "/episodes/{episode_id}/audio/{file_name}",
+    "/episodes/{episode_id}/audios/{file_name}",
     responses={
         status.HTTP_404_NOT_FOUND: {"description": "Audio file or episode not found"},
         status.HTTP_400_BAD_REQUEST: {"description": "Episode preprocessing not completed"},
@@ -218,10 +218,6 @@ def get_audio_file(episode_id: str, file_name: str, session: SessionDep) -> File
     """Retrieves a specific audio file"""
     episode = _get_episode_or_404(episode_id, session)
     _check_status_or_400(episode, "preprocess_status")
-
-    # Validate and sanitize file_name to prevent directory traversal
-    if ".." in file_name or "/" in file_name or "\\" in file_name:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid file name")
 
     audio_file_path = app_dir / "episodes" / episode_id / "preprocessed" / file_name
     if not audio_file_path.exists():
