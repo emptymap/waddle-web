@@ -42,8 +42,8 @@ def client_fixture(session: Session) -> Generator[TestClient]:
     app.dependency_overrides.clear()
 
 
-@pytest.fixture(name="prepopulated_client")
-def prepopulated_client_fixture(session: Session, monkeypatch: MonkeyPatch) -> Generator[TestClient]:
+@pytest.fixture(name="preprocessed_client")
+def preprocessed_client_fixture(session: Session, monkeypatch: MonkeyPatch) -> Generator[TestClient]:
     """
     Create a test client with a pre-populated episode similar to test_create_episode_with_wavs.
     """
@@ -58,12 +58,13 @@ def prepopulated_client_fixture(session: Session, monkeypatch: MonkeyPatch) -> G
         episode_dir = temp_dir_path / "episodes" / episode_id
         episode_dir.mkdir(parents=True, exist_ok=True)
 
+        original_wav = tests_dir / "ep0" / "ep12-masa.wav"
+
         # Create source directory and add sample files
         source_dir = episode_dir / "source"
         source_dir.mkdir(exist_ok=True)
         sample_wav = source_dir / "sample.wav"
-        with open(sample_wav, "wb") as f:
-            f.write(b"RIFF\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x44\xac\x00\x00\x88\x58\x01\x00\x02\x00\x10\x00data\x00\x00\x00\x00")
+        sample_wav.write_bytes(original_wav.read_bytes())
 
         # Create preprocessed directory and add sample files
         preprocessed_dir = episode_dir / "preprocessed"
@@ -71,8 +72,7 @@ def prepopulated_client_fixture(session: Session, monkeypatch: MonkeyPatch) -> G
 
         # Create sample preprocessed WAV file
         preprocessed_wav = preprocessed_dir / "preprocessed_sample.wav"
-        with open(preprocessed_wav, "wb") as f:
-            f.write(b"RIFF\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x44\xac\x00\x00\x88\x58\x01\x00\x02\x00\x10\x00data\x00\x00\x00\x00")
+        preprocessed_wav.write_bytes(original_wav.read_bytes())
 
         # Create sample SRT file
         srt_file = preprocessed_dir / "transcript.srt"
@@ -267,15 +267,15 @@ def test_delete_episode_not_found(client: TestClient) -> None:
 #####################################
 
 
-def test_get_audio_file(prepopulated_client: TestClient) -> None:
+def test_get_audio_file(preprocessed_client: TestClient) -> None:
     """Test retrieving a specific audio file for a pre-populated episode."""
     # Get the episode from the database
-    episodes = prepopulated_client.get("/v1/episodes/").json()
+    episodes = preprocessed_client.get("/v1/episodes/").json()
     assert len(episodes) > 0
     episode_id = episodes[0]["uuid"]
 
     # Get list of audio files
-    audio_files_response = prepopulated_client.get(f"/v1/episodes/{episode_id}/audios")
+    audio_files_response = preprocessed_client.get(f"/v1/episodes/{episode_id}/audios")
     assert audio_files_response.status_code == 200
 
     audio_files = audio_files_response.json()
@@ -283,31 +283,31 @@ def test_get_audio_file(prepopulated_client: TestClient) -> None:
 
     # Test getting the audio file (using exact filename from our fixture)
     file_name = "preprocessed_sample.wav"
-    response = prepopulated_client.get(f"/v1/episodes/{episode_id}/audio/{file_name}")
+    response = preprocessed_client.get(f"/v1/episodes/{episode_id}/audio/{file_name}")
     assert response.status_code == 200
 
     # Verify it's an audio file by checking content type
     assert response.headers["content-type"] == "audio/wav"
 
     # Test with invalid file name
-    response = prepopulated_client.get(f"/v1/episodes/{episode_id}/audio/nonexistent.wav")
+    response = preprocessed_client.get(f"/v1/episodes/{episode_id}/audio/nonexistent.wav")
     assert response.status_code == 404
 
     # Test with potentially malicious file name
     malicious_filename = urllib.parse.quote("../../../../etc/passwd")
-    response = prepopulated_client.get(f"/v1/episodes/prepopulated-episode/audio/{malicious_filename}")
+    response = preprocessed_client.get(f"/v1/episodes/prepopulated-episode/audio/{malicious_filename}")
     assert response.status_code != 200
 
 
-def test_get_transcription(prepopulated_client: TestClient) -> None:
+def test_get_transcription(preprocessed_client: TestClient) -> None:
     """Test retrieving SRT transcription for a pre-populated episode."""
     # Get the episode from the database
-    episodes = prepopulated_client.get("/v1/episodes/").json()
+    episodes = preprocessed_client.get("/v1/episodes/").json()
     assert len(episodes) > 0
     episode_id = episodes[0]["uuid"]
 
     # Test getting SRT content
-    response = prepopulated_client.get(f"/v1/episodes/{episode_id}/srt")
+    response = preprocessed_client.get(f"/v1/episodes/{episode_id}/srt")
     assert response.status_code == 200
 
     # Verify the SRT content format
@@ -324,22 +324,22 @@ def test_get_transcription(prepopulated_client: TestClient) -> None:
     assert "00:00:05,500 --> 00:00:10,000" in srt_content
 
 
-def test_preprocessed_resources_with_invalid_episode_prepopulated(prepopulated_client: TestClient) -> None:
+def test_preprocessed_resources_with_invalid_episode_prepopulated(preprocessed_client: TestClient) -> None:
     """Test retrieving preprocessed resources with an invalid episode ID."""
     invalid_id = "nonexistent-id"
 
     # Test with nonexistent episode ID
-    response = prepopulated_client.get(f"/v1/episodes/{invalid_id}/audios")
+    response = preprocessed_client.get(f"/v1/episodes/{invalid_id}/audios")
     assert response.status_code == 404
 
-    response = prepopulated_client.get(f"/v1/episodes/{invalid_id}/audio/file.wav")
+    response = preprocessed_client.get(f"/v1/episodes/{invalid_id}/audio/file.wav")
     assert response.status_code == 404
 
-    response = prepopulated_client.get(f"/v1/episodes/{invalid_id}/srt")
+    response = preprocessed_client.get(f"/v1/episodes/{invalid_id}/srt")
     assert response.status_code == 404
 
 
-def test_preprocessed_resources_before_preprocessing_prepopulated(session: Session, prepopulated_client: TestClient) -> None:
+def test_preprocessed_resources_before_preprocessing_prepopulated(session: Session, preprocessed_client: TestClient) -> None:
     """Test retrieving preprocessed resources for an episode before preprocessing is complete."""
     # Create a new episode with pending preprocessing status
     episode = Episode(title="Test Episode", preprocess_status=JobStatus.pending)
@@ -348,11 +348,67 @@ def test_preprocessed_resources_before_preprocessing_prepopulated(session: Sessi
 
     episode_id = episode.uuid
 
-    response = prepopulated_client.get(f"/v1/episodes/{episode_id}/audios")
+    response = preprocessed_client.get(f"/v1/episodes/{episode_id}/audios")
     assert response.status_code == 400
 
-    response = prepopulated_client.get(f"/v1/episodes/{episode_id}/audio/file.wav")
+    response = preprocessed_client.get(f"/v1/episodes/{episode_id}/audio/file.wav")
     assert response.status_code == 400
 
-    response = prepopulated_client.get(f"/v1/episodes/{episode_id}/srt")
+    response = preprocessed_client.get(f"/v1/episodes/{episode_id}/srt")
     assert response.status_code == 400
+
+
+#####################################
+# MARK: Audio editing endpoints tests
+#####################################
+
+
+def test_apply_audio_edits(preprocessed_client: TestClient) -> None:
+    """Test applying audio edits to an episode."""
+    episodes = preprocessed_client.get("/v1/episodes/").json()
+    assert len(episodes) > 0
+    episode_id = episodes[0]["uuid"]
+
+    # Apply audio edits
+    response = preprocessed_client.post(f"/v1/episodes/{episode_id}/audio-edits")
+    assert response.status_code == 200
+
+    # Check that we get a list of file names
+    file_names: list[str] = response.json()
+    assert isinstance(file_names, list)
+    assert len(file_names) > 0
+
+    # Check edited audio file
+    response = preprocessed_client.get(f"/v1/episodes/{episode_id}/edited-audio")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "audio/wav"
+    assert len(response.content) > 0
+
+
+def test_apply_audio_edits_invalid_episode(preprocessed_client: TestClient) -> None:
+    """Test applying audio edits to a non-existent episode."""
+    response = preprocessed_client.post("/v1/episodes/nonexistent-id/audio-edits")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Episode not found"
+
+
+def test_apply_audio_edits_preprocessing_incomplete(session: Session, preprocessed_client: TestClient) -> None:
+    """Test applying audio edits when preprocessing is not complete."""
+    episode = Episode(title="Test Episode", preprocess_status=JobStatus.pending)
+    session.add(episode)
+    session.commit()
+
+    episode_id = episode.uuid
+
+    response = preprocessed_client.post(f"/v1/episodes/{episode_id}/audio-edits")
+    assert response.status_code == 400
+
+    response = preprocessed_client.get(f"/v1/episodes/{episode_id}/edited-audio")
+    assert response.status_code == 400
+
+
+def test_get_edited_audio_not_found(preprocessed_client: TestClient) -> None:
+    """Test getting edited audio for a non-existent episode."""
+    response = preprocessed_client.get("/v1/episodes/nonexistent-id/edited-audio")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Episode not found"
