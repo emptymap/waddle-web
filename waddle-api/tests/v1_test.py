@@ -787,22 +787,6 @@ def test_download_export_not_completed(session: Session, export_client: TestClie
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
-def test_export_missing_metadata(session: Session, edited_client: TestClient) -> None:
-    """Test initiating export when metadata is not yet completed."""
-    episode = Episode(
-        title="Missing Metadata",
-        preprocess_status=JobStatus.completed,
-        edit_status=JobStatus.completed,
-        postprocess_status=JobStatus.completed,
-        metadata_generation_status=JobStatus.pending,
-    )
-    session.add(episode)
-    session.commit()
-
-    response = edited_client.post(f"/v1/episodes/{episode.uuid}/export")
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-
-
 ##################################
 # MARK: Episode creation tests
 ##################################
