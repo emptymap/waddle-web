@@ -6,6 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Qu
 from fastapi.responses import FileResponse
 from platformdirs import user_data_dir
 from sqlmodel import Session, select
+from waddle.metadata import generate_metadata
 from waddle.processing.combine import combine_audio_files
 from waddle.processor import postprocess_multi_files, preprocess_multi_files
 
@@ -503,6 +504,170 @@ def update_annotated_srt(episode_id: str, annotated_srt: AnnotatedSrtContent, se
 
 
 #####################################
+# MARK: Metadata Generation endpoints
+#####################################
+metadata_router = APIRouter(tags=["metadata"])
+
+
+def _check_metadata_or_400(episode: Episode) -> None:
+    """Check if metadata generation is completed for an episode"""
+    if episode.metadata_generation_status != JobStatus.completed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Episode metadata generation is not completed. Current status: {episode.metadata_generation_status}",
+        )
+
+
+@metadata_router.post(
+    "/episodes/{episode_id}/metadata",
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Episode not found"},
+        status.HTTP_400_BAD_REQUEST: {"description": "Episode post-processing not completed"},
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "Internal server error"},
+    },
+)
+def generate_episode_metadata(episode_id: str, background_tasks: BackgroundTasks, session: SessionDep) -> Episode:
+    """
+    Generate metadata for an episode including chapters and show notes
+    based on the annotated SRT file.
+    """
+    episode = _get_episode_or_404(episode_id, session)
+    _check_postprocessed_or_400(episode)
+
+    # Create a new processing job for metadata generation
+    job = ProcessingJob(episode_id=episode.uuid, type=JobType.metadata, status=JobStatus.pending)
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+
+    # Start the background task
+    background_tasks.add_task(run_metadata_generation, job_id=job.id, episode_uuid=episode_id, db=session)
+
+    episode.metadata_generation_status = JobStatus.pending
+    session.add(episode)
+    session.commit()
+    session.refresh(episode)
+
+    return episode
+
+
+def run_metadata_generation(job_id: int, episode_uuid: str, db: Session) -> None:
+    """Background task to run metadata generation"""
+    job = db.get(ProcessingJob, job_id)
+    if not job:
+        return
+
+    episode = db.get(Episode, episode_uuid)
+    if not episode:
+        return
+
+    episode.metadata_generation_status = JobStatus.processing
+    job.status = JobStatus.processing
+    db.commit()
+    db.refresh(episode)
+    db.refresh(job)
+
+    try:
+        episode_dir = app_dir / "episodes" / episode_uuid
+        metadata_dir = episode_dir / "metadata"
+        metadata_dir.mkdir(exist_ok=True, parents=True)
+
+        # Get the source SRT file
+        srt_file = _get_combined_srt_or_404(episode_uuid)
+
+        # Get the audio file
+        postprocessed_dir = episode_dir / "postprocessed"
+        audio_files = list(postprocessed_dir.glob("*.wav"))
+        audio_file = None
+
+        if audio_files:
+            combined_audio = None
+            for audio in audio_files:
+                audio_prefix = audio.stem
+                if "-" not in audio_prefix:
+                    combined_audio = audio
+                    break
+            audio_file = combined_audio or audio_files[0]
+
+        # Generate metadata
+        generate_metadata(source_file=srt_file, audio_file=audio_file, output_dir=metadata_dir)
+
+        episode.metadata_generation_status = JobStatus.completed
+        job.status = JobStatus.completed
+    except Exception as e:
+        episode.metadata_generation_status = JobStatus.failed
+        job.status = JobStatus.failed
+        job.error_message = str(e)
+    finally:
+        db.commit()
+        db.refresh(episode)
+        db.refresh(job)
+        db.close()
+
+
+@metadata_router.get(
+    "/episodes/{episode_id}/chapters",
+    response_model=str,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Episode or chapters file not found"},
+        status.HTTP_400_BAD_REQUEST: {"description": "Metadata generation not completed"},
+    },
+)
+def get_chapter_info(episode_id: str, session: SessionDep) -> str:
+    """Get chapter information for an episode"""
+    episode = _get_episode_or_404(episode_id, session)
+    _check_metadata_or_400(episode)
+
+    metadata_dir = app_dir / "episodes" / episode_id / "metadata"
+    if not metadata_dir.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Metadata directory not found")
+
+    # Look for chapter file
+    chapter_files = list(metadata_dir.glob("*.chapters.txt"))
+    if not chapter_files:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chapter file not found")
+
+    chapter_file = chapter_files[0]
+    try:
+        with open(chapter_file, "r", encoding="utf-8") as file:
+            chapters_content = file.read()
+        return chapters_content
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error reading chapter file: {str(e)}") from e
+
+
+@metadata_router.get(
+    "/episodes/{episode_id}/show-notes",
+    response_model=str,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Episode or show notes file not found"},
+        status.HTTP_400_BAD_REQUEST: {"description": "Metadata generation not completed"},
+    },
+)
+def get_show_notes(episode_id: str, session: SessionDep) -> str:
+    """Get show notes for an episode"""
+    episode = _get_episode_or_404(episode_id, session)
+    _check_metadata_or_400(episode)
+
+    metadata_dir = app_dir / "episodes" / episode_id / "metadata"
+    if not metadata_dir.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Metadata directory not found")
+
+    show_notes_files = list(metadata_dir.glob("*.show_notes.md"))
+    if not show_notes_files:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Show notes file not found")
+
+    show_notes_file = show_notes_files[0]
+    try:
+        with open(show_notes_file, "r", encoding="utf-8") as file:
+            show_notes_content = file.read()
+        return show_notes_content
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error reading show notes file: {str(e)}") from e
+
+
+#####################################
 # MARK: Include routers
 #####################################
 v1_router.include_router(episodes_router)
@@ -510,3 +675,4 @@ v1_router.include_router(preprocess_resources_router)
 v1_router.include_router(audio_editing_router)
 v1_router.include_router(postprocess_router)
 v1_router.include_router(transcription_router)
+v1_router.include_router(metadata_router)
