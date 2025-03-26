@@ -19,13 +19,13 @@ SessionDep = Annotated[Session, Depends(get_session)]
 app_dir = Path(user_data_dir(APP_NAME, APP_AUTHOR))
 
 # Create v1 router
-v1_router = APIRouter(tags=["v1"])
+v1_router = APIRouter(prefix="/v1")
 
 
 #####################################
 # MARK: Episode CRUD operations
 #####################################
-episodes_router = APIRouter(tags=["episodes"])
+episodes_router = APIRouter(tags=["v1_episodes"])
 
 
 @episodes_router.get("/episodes/", response_model=List[Episode])
@@ -168,7 +168,7 @@ def delete_episode(episode_id: str, session: SessionDep) -> None:
 #####################################
 # MARK: Preprocessed resources: audio files and SRT transcription
 #####################################
-preprocess_resources_router = APIRouter(tags=["preprocessed_resources"])
+preprocess_resources_router = APIRouter(tags=["v1_preprocessed_resources"])
 
 
 def _check_preprocessed_or_400(episode: Episode) -> None:
@@ -251,7 +251,7 @@ def get_transcription(episode_id: str, session: SessionDep) -> str:
 # MARK: Audio editing endpoints
 # TODO: Implement audio editing endpoints
 #####################################
-audio_editing_router = APIRouter(tags=["audio_editing"])
+audio_editing_router = APIRouter(tags=["v1_audio_editing"])
 
 
 def _check_edited_or_400(episode: Episode) -> None:
@@ -356,7 +356,7 @@ def get_edited_audio_files(episode_id: str, session: SessionDep) -> FileResponse
 #####################################
 # MARK: Post-processing endpoints
 #####################################
-postprocess_router = APIRouter(tags=["postprocess"])
+postprocess_router = APIRouter(tags=["v1_postprocess"])
 
 
 def _check_postprocessed_or_400(episode: Episode) -> None:
@@ -475,7 +475,7 @@ def get_postprocessed_audio(episode_id: str, session: SessionDep) -> FileRespons
 #####################################
 # MARK: Transcription Management endpoints
 #####################################
-transcription_router = APIRouter(tags=["transcription"])
+transcription_router = APIRouter(tags=["v1_transcription"])
 
 
 def _get_combined_srt_or_404(episode_id: str) -> Path:
@@ -557,7 +557,7 @@ def update_annotated_srt(episode_id: str, annotated_srt: AnnotatedSrtContent, se
 #####################################
 # MARK: Metadata Generation endpoints
 #####################################
-metadata_router = APIRouter(tags=["metadata"])
+metadata_router = APIRouter(tags=["v1_metadata"])
 
 
 def _check_metadata_or_400(episode: Episode) -> None:
@@ -711,7 +711,7 @@ def get_show_notes(episode_id: str, session: SessionDep) -> str:
 #####################################
 # MARK: Export endpoints
 #####################################
-export_router = APIRouter(tags=["export"])
+export_router = APIRouter(tags=["v1_export"])
 
 
 def _check_export_or_400(episode: Episode) -> None:
