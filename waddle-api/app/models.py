@@ -21,8 +21,10 @@ class Episode(SQLModel, table=True):
 
     uuid: str = Field(default_factory=generate, primary_key=True)
     preprocess_status: JobStatus = Field(default=JobStatus.init)
+    edit_status: JobStatus = Field(default=JobStatus.init)
     postprocess_status: JobStatus = Field(default=JobStatus.init)
     metadata_generation_status: JobStatus = Field(default=JobStatus.init)
+    export_status: JobStatus = Field(default=JobStatus.init)
     editor_state: str = Field(default="")
     title: str = Field(default="")
     created_at: datetime = Field(default_factory=datetime.now)
@@ -40,9 +42,10 @@ class JobType(str, Enum):
     """Enum for processing job types"""
 
     preprocess = "preprocess"
+    edit = "edit"
     postprocess = "postprocess"
     metadata = "metadata"
-    audio_edit = "audio_edit"
+    export = "export"
 
 
 class ProcessingJob(SQLModel, table=True):

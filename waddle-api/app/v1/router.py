@@ -259,29 +259,71 @@ audio_editing_router = APIRouter(tags=["audio_editing"])
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"description": "Internal server error"},
     },
 )
-def apply_audio_edits(episode_id: str, session: SessionDep) -> list[str]:
+def apply_audio_edits(episode_id: str, session: SessionDep, background_tasks: BackgroundTasks) -> Episode:
     """Apply audio edits based on the episode's editor_state"""
     episode = _get_episode_or_404(episode_id, session)
     _check_preprocessed_or_400(episode)
 
-    episode_dir = app_dir / "episodes" / episode_id
-    source_dir = episode_dir / "preprocessed"
-    edited_dir = episode_dir / "edited"
-    edited_dir.mkdir(exist_ok=True, parents=True)
+    job = ProcessingJob(episode_id=episode.uuid, type=JobType.edit, status=JobStatus.pending)
+    session.add(job)
 
-    # Copy all preprocessed audio files to edited directory
-    for file_path in source_dir.glob("*.wav"):
-        shutil.copy(file_path, edited_dir)
+    episode.edit_status = JobStatus.pending
+    session.add(episode)
+    session.commit()
+    session.refresh(job)
+    session.refresh(episode)
 
-    # Get all audio files
-    edited_files = sorted(list(edited_dir.glob("*.wav")))
-    if not edited_files:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No audio files found")
+    background_tasks.add_task(run_editing, job_id=job.id, episode_uuid=episode_id, db=session)
 
-    combine_audio_path = episode_dir / "edited-combined.wav"
-    combine_audio_files(edited_files, combine_audio_path)
+    return episode
 
-    return [file_path.name for file_path in edited_dir.glob("*.wav")]
+
+def run_editing(job_id: int, episode_uuid: str, db: Session) -> None:
+    """Background task to run audio editing"""
+    job = db.get(ProcessingJob, job_id)
+    if not job:
+        return
+
+    episode = db.get(Episode, episode_uuid)
+    if not episode:
+        return
+
+    episode.edit_status = JobStatus.processing
+    job.status = JobStatus.processing
+    db.commit()
+    db.refresh(episode)
+    db.refresh(job)
+
+    try:
+        episode_dir = app_dir / "episodes" / episode_uuid
+        source_dir = episode_dir / "preprocessed"
+        edited_dir = episode_dir / "edited"
+        edited_dir.mkdir(exist_ok=True, parents=True)
+
+        # Copy all preprocessed audio files to edited directory
+        for file_path in source_dir.glob("*.wav"):
+            shutil.copy(file_path, edited_dir)
+
+        # Get all audio files
+        edited_files = sorted(list(edited_dir.glob("*.wav")))
+        if not edited_files:
+            raise Exception("No audio files found")
+
+        # Create combined audio file from edits
+        combine_audio_path = episode_dir / "edited-combined.wav"
+        combine_audio_files(edited_files, combine_audio_path)
+
+        episode.edit_status = JobStatus.completed
+        job.status = JobStatus.completed
+    except Exception as e:
+        episode.edit_status = JobStatus.failed
+        job.status = JobStatus.failed
+        job.error_message = str(e)
+    finally:
+        db.commit()
+        db.refresh(episode)
+        db.refresh(job)
+        db.close()
 
 
 @audio_editing_router.get(
