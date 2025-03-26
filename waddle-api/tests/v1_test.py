@@ -131,6 +131,9 @@ def _add_metadata(episode_dir: Path) -> None:
     metadata_dir = episode_dir / "metadata"
     metadata_dir.mkdir(exist_ok=True)
 
+    metadata_audio_file = metadata_dir / "metadata_audio.wav"
+    metadata_audio_file.write_bytes(b"Dummy audio data for metadata.")
+
     # Add chapter file
     chapter_file = metadata_dir / "test.chapters.txt"
     with open(chapter_file, "w") as f:
@@ -685,6 +688,11 @@ def test_get_chapter_info(metadata_client: TestClient) -> None:
     """Test retrieving chapter information."""
     episodes = metadata_client.get("/v1/episodes/").json()
     episode_id = episodes[0]["uuid"]
+
+    response = metadata_client.get(f"/v1/episodes/{episode_id}/metadata-audio")
+    assert response.status_code == status.HTTP_200_OK
+    assert response.headers["content-type"] == "audio/wav"
+    assert len(response.content) > 0
 
     response = metadata_client.get(f"/v1/episodes/{episode_id}/chapters")
     assert response.status_code == status.HTTP_200_OK
