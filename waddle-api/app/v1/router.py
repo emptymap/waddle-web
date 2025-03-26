@@ -367,6 +367,26 @@ def _check_postprocessed_or_400(episode: Episode) -> None:
         )
 
 
+def _get_post_combined_audio_or_404(episode_id: str) -> Path:
+    """Get the combined audio file for an episode"""
+    episode_dir = app_dir / "episodes" / episode_id
+    target_dir = episode_dir / "postprocessed"
+    target_files = list(target_dir.glob("*.wav"))
+    if not target_files:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Edited audio file not found")
+
+    combined_audio = None
+    for audio_file in target_files:
+        audio_prefix = audio_file.stem
+        if "-" not in audio_prefix:
+            combined_audio = audio_file
+            break
+    if combined_audio is None:
+        combined_audio = target_files[0]
+
+    return combined_audio
+
+
 @postprocess_router.post(
     "/episodes/{episode_id}/postprocess",
     status_code=status.HTTP_202_ACCEPTED,
@@ -454,15 +474,7 @@ def get_postprocessed_audio(episode_id: str, session: SessionDep) -> FileRespons
     if not audio_files:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post-processed audio file not found")
 
-    combined_audio = None
-    for audio_file in audio_files:
-        audio_prefix = audio_file.stem
-        if "-" not in audio_prefix:
-            combined_audio = audio_file
-            break
-    if combined_audio is None:
-        combined_audio = audio_files[0]
-
+    combined_audio = _get_post_combined_audio_or_404(episode_id)
     return FileResponse(path=combined_audio, media_type="audio/wav", filename=combined_audio.name)
 
 
@@ -506,12 +518,7 @@ def get_annotated_srt(episode_id: str, session: SessionDep) -> AnnotatedSrtConte
     episode = _get_episode_or_404(episode_id, session)
     _check_postprocessed_or_400(episode)
 
-    preprocessed_dir = app_dir / "episodes" / episode_id / "postprocessed"
-    srt_files = list(preprocessed_dir.glob("*.srt"))
-    if not srt_files:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Annotated SRT file not found")
     combined_srt = _get_combined_srt_or_404(episode_id)
-
     try:
         with open(combined_srt, "r", encoding="utf-8") as file:
             srt_content = file.read()
@@ -534,12 +541,7 @@ def update_annotated_srt(episode_id: str, annotated_srt: AnnotatedSrtContent, se
     episode = _get_episode_or_404(episode_id, session)
     _check_postprocessed_or_400(episode)
 
-    preprocessed_dir = app_dir / "episodes" / episode_id / "postprocessed"
-    srt_files = list(preprocessed_dir.glob("*.srt"))
-    if not srt_files:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Annotated SRT file not found")
     combined_srt = _get_combined_srt_or_404(episode_id)
-
     try:
         with open(combined_srt, "w", encoding="utf-8") as file:
             file.write(annotated_srt.content)
@@ -588,23 +590,11 @@ def generate_episode_metadata(episode_id: str, session: SessionDep) -> list[str]
     metadata_dir.mkdir(exist_ok=True, parents=True)
 
     srt_file = _get_combined_srt_or_404(episode_id)
-
-    postprocessed_dir = episode_dir / "postprocessed"
-    audio_files = list(postprocessed_dir.glob("*.wav"))
-
-    audio_file = None
-    if audio_files:
-        combined_audio = None
-        for audio in audio_files:
-            audio_prefix = audio.stem
-            if "-" not in audio_prefix:
-                combined_audio = audio
-                break
-        audio_file = combined_audio or audio_files[0]
+    combined_audio = _get_post_combined_audio_or_404(episode_id)
 
     # Generate metadata
     try:
-        generate_metadata(source_file=srt_file, audio_file=audio_file, output_dir=metadata_dir)
+        generate_metadata(source_file=srt_file, audio_file=combined_audio, output_dir=metadata_dir)
         episode.metadata_generation_status = JobStatus.completed
     except Exception as e:
         episode.metadata_generation_status = JobStatus.failed
