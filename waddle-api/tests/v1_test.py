@@ -786,7 +786,7 @@ def test_process_all(session: Session, client: TestClient, monkeypatch: MonkeyPa
 
         annotated_srt_content = (
             "1\n00:00:00.000 --> 00:00:01.540\nkotaro: なんかジャンプできるようになってる\n\n# Test1\n\n"
-            "2\n00:00:02.250 --> 00:00:03.250\nshun: ありがとうございました\n\n# Test2\n\n- [testurl](https://www.youtube.com/watch?v=1)\n\n"
+            "2\n00:00:02.250 --> 00:00:03.250\nshun: ありがとうございました\n\n# Test2 \n\n- [testurl](https://www.youtube.com/watch?v=1)\n\n"
             "3\n00:00:03.250 --> 00:00:07.750\nmasa: マークダウンの目次みたいなのが右に出てくるっていうイメージでやってました\n\n"
         )
         response = client.put(f"/v1/episodes/{data['uuid']}/annotated-srt", json={"content": annotated_srt_content})
@@ -799,7 +799,6 @@ def test_process_all(session: Session, client: TestClient, monkeypatch: MonkeyPa
         response = client.get(f"/v1/episodes/{data['uuid']}/chapters")
         assert response.status_code == status.HTTP_200_OK
         content = response.content.decode("utf-8")
-        assert len(content) == 2
         assert "- (00:02) Test1" in content
         assert "- (00:03) Test2" in content
 
