@@ -286,7 +286,7 @@ def metadata_client_fixture(session: Session, monkeypatch: MonkeyPatch) -> Gener
 def test_read_episodes_empty(client: TestClient) -> None:
     """Test reading episodes when the database is empty."""
     response = client.get("/v1/episodes/")
-    assert response.status_code == 200
+    assert response.status_code == status.HTTP_200_OK
     assert response.json() == []
 
 
@@ -303,7 +303,7 @@ def test_read_episodes(session: Session, client: TestClient) -> None:
     response = client.get("/v1/episodes/")
     data = response.json()
 
-    assert response.status_code == 200
+    assert response.status_code == status.HTTP_200_OK
     assert len(data) == 2
     assert data[0]["title"] == episode_1.title
     assert data[1]["title"] == episode_2.title
@@ -325,7 +325,7 @@ def test_read_episode(session: Session, client: TestClient) -> None:
     # Read the episode
     response = client.get(f"/v1/episodes/{episode.uuid}")
 
-    assert response.status_code == 200
+    assert response.status_code == status.HTTP_200_OK
     data = response.json()
     assert data["title"] == episode.title
 
@@ -340,7 +340,7 @@ def test_update_episode(session: Session, client: TestClient) -> None:
     # Update the episode
     response = client.patch(f"/v1/episodes/{episode.uuid}", json={"title": "Updated Title"})
 
-    assert response.status_code == 200
+    assert response.status_code == status.HTTP_200_OK
     data = response.json()
     assert data["title"] == "Updated Title"
 
@@ -354,7 +354,7 @@ def test_update_episode_not_found(client: TestClient) -> None:
     """Test updating a non-existent episode."""
     response = client.patch("/v1/episodes/nonexistent-id", json={"title": "Updated Title"})
 
-    assert response.status_code == 404
+    assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json()["detail"] == "Episode not found"
 
 
@@ -368,7 +368,7 @@ def test_delete_episode(session: Session, client: TestClient) -> None:
     # Delete the episode
     response = client.delete(f"/v1/episodes/{episode.uuid}")
 
-    assert response.status_code == 204
+    assert response.status_code == status.HTTP_204_NO_CONTENT
 
     # Verify the episode was deleted from the database
     deleted_episode = session.get(Episode, episode.uuid)
@@ -379,7 +379,7 @@ def test_delete_episode_not_found(client: TestClient) -> None:
     """Test deleting a non-existent episode."""
     response = client.delete("/v1/episodes/nonexistent-id")
 
-    assert response.status_code == 404
+    assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json()["detail"] == "Episode not found"
 
 
@@ -405,14 +405,14 @@ def test_get_audio_file(preprocessed_client: TestClient) -> None:
     # Test getting the audio file (using exact filename from our fixture)
     file_name = "preprocessed_sample.wav"
     response = preprocessed_client.get(f"/v1/episodes/{episode_id}/audio/{file_name}")
-    assert response.status_code == 200
+    assert response.status_code == status.HTTP_200_OK
 
     # Verify it's an audio file by checking content type
     assert response.headers["content-type"] == "audio/wav"
 
     # Test with invalid file name
     response = preprocessed_client.get(f"/v1/episodes/{episode_id}/audio/nonexistent.wav")
-    assert response.status_code == 404
+    assert response.status_code == status.HTTP_404_NOT_FOUND
 
     # Test with potentially malicious file name
     malicious_filename = urllib.parse.quote("../../../../etc/passwd")
@@ -429,7 +429,7 @@ def test_get_transcription(preprocessed_client: TestClient) -> None:
 
     # Test getting SRT content
     response = preprocessed_client.get(f"/v1/episodes/{episode_id}/srt")
-    assert response.status_code == 200
+    assert response.status_code == status.HTTP_200_OK
 
     # Verify the SRT content format
     srt_content = response.text
@@ -451,13 +451,13 @@ def test_preprocessed_resources_with_invalid_episode_prepopulated(preprocessed_c
 
     # Test with nonexistent episode ID
     response = preprocessed_client.get(f"/v1/episodes/{invalid_id}/audios")
-    assert response.status_code == 404
+    assert response.status_code == status.HTTP_404_NOT_FOUND
 
     response = preprocessed_client.get(f"/v1/episodes/{invalid_id}/audio/file.wav")
-    assert response.status_code == 404
+    assert response.status_code == status.HTTP_404_NOT_FOUND
 
     response = preprocessed_client.get(f"/v1/episodes/{invalid_id}/srt")
-    assert response.status_code == 404
+    assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
 def test_preprocessed_resources_before_preprocessing_prepopulated(session: Session, preprocessed_client: TestClient) -> None:
@@ -469,13 +469,13 @@ def test_preprocessed_resources_before_preprocessing_prepopulated(session: Sessi
     episode_id = episode.uuid
 
     response = preprocessed_client.get(f"/v1/episodes/{episode_id}/audios")
-    assert response.status_code == 400
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     response = preprocessed_client.get(f"/v1/episodes/{episode_id}/audio/file.wav")
-    assert response.status_code == 400
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     response = preprocessed_client.get(f"/v1/episodes/{episode_id}/srt")
-    assert response.status_code == 400
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
 #####################################
@@ -490,7 +490,7 @@ def test_get_edited_combined_audio(edited_client: TestClient) -> None:
     episode_id = episodes[0]["uuid"]
 
     response = edited_client.get(f"/v1/episodes/{episode_id}/edited-audio")
-    assert response.status_code == 200
+    assert response.status_code == status.HTTP_200_OK
     assert response.headers["content-type"] == "audio/wav"
     assert len(response.content) > 0
 
@@ -498,7 +498,7 @@ def test_get_edited_combined_audio(edited_client: TestClient) -> None:
 def test_apply_audio_edits_invalid_episode(edited_client: TestClient) -> None:
     """Test applying audio edits to a non-existent episode."""
     response = edited_client.post("/v1/episodes/nonexistent-id/audio-edits")
-    assert response.status_code == 404
+    assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json()["detail"] == "Episode not found"
 
 
@@ -511,16 +511,16 @@ def test_apply_audio_edits_preprocessing_incomplete(session: Session, edited_cli
     episode_id = episode.uuid
 
     response = edited_client.post(f"/v1/episodes/{episode_id}/audio-edits")
-    assert response.status_code == 400
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     response = edited_client.get(f"/v1/episodes/{episode_id}/edited-audio")
-    assert response.status_code == 400
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
 def test_get_edited_audio_not_found(edited_client: TestClient) -> None:
     """Test getting edited audio for a non-existent episode."""
     response = edited_client.get("/v1/episodes/nonexistent-id/edited-audio")
-    assert response.status_code == 404
+    assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json()["detail"] == "Episode not found"
 
 
@@ -536,7 +536,7 @@ def test_get_postprocessed_audio(postprocessed_client: TestClient) -> None:
     episode_id = episodes[0]["uuid"]
 
     response = postprocessed_client.get(f"/v1/episodes/{episode_id}/postprocessed-audio")
-    assert response.status_code == 200
+    assert response.status_code == status.HTTP_200_OK
     assert response.headers["content-type"] == "audio/wav"
     assert len(response.content) > 0
 
@@ -544,11 +544,11 @@ def test_get_postprocessed_audio(postprocessed_client: TestClient) -> None:
 def test_postprocess_invalid_episode(postprocessed_client: TestClient) -> None:
     """Test initiating postprocessing for a non-existent episode."""
     response = postprocessed_client.post("/v1/episodes/nonexistent-id/postprocess")
-    assert response.status_code == 404
+    assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json()["detail"] == "Episode not found"
 
     response = postprocessed_client.get("/v1/episodes/nonexistent-id/postprocessed-audio")
-    assert response.status_code == 404
+    assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json()["detail"] == "Episode not found"
 
 
@@ -561,11 +561,11 @@ def test_postprocess_preprocessing_incomplete(session: Session, postprocessed_cl
     episode_id = episode.uuid
 
     response = postprocessed_client.post(f"/v1/episodes/{episode_id}/postprocess")
-    assert response.status_code == 400
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert "Episode preprocessing is not completed" in response.json()["detail"]
 
     response = postprocessed_client.get(f"/v1/episodes/{episode_id}/postprocessed-audio")
-    assert response.status_code == 400
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
 #####################################
@@ -580,7 +580,7 @@ def test_get_and_update_annotated_srt(postprocessed_client: TestClient) -> None:
     episode_id = episodes[0]["uuid"]
 
     response = postprocessed_client.get(f"/v1/episodes/{episode_id}/annotated-srt")
-    assert response.status_code == 200
+    assert response.status_code == status.HTTP_200_OK
 
     data = response.json()
     assert "content" in data
@@ -605,10 +605,10 @@ def test_get_and_update_annotated_srt(postprocessed_client: TestClient) -> None:
 def test_transcription_management_invalid_episode(postprocessed_client: TestClient) -> None:
     """Test transcription management endpoints with non-existent episode."""
     response = postprocessed_client.get("/v1/episodes/nonexistent-id/annotated-srt")
-    assert response.status_code == 404
+    assert response.status_code == status.HTTP_404_NOT_FOUND
 
     response = postprocessed_client.put("/v1/episodes/nonexistent-id/annotated-srt", json={"content": "Test content"})
-    assert response.status_code == 404
+    assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
 def test_transcription_management_preprocessing_incomplete(session: Session, postprocessed_client: TestClient) -> None:
@@ -621,11 +621,11 @@ def test_transcription_management_preprocessing_incomplete(session: Session, pos
 
     # Test getting SRT before postprocessing is complete
     response = postprocessed_client.get(f"/v1/episodes/{episode_id}/annotated-srt")
-    assert response.status_code == 400
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     # Test updating SRT before postprocessing is complete
     response = postprocessed_client.put(f"/v1/episodes/{episode_id}/annotated-srt", json={"content": "Test content"})
-    assert response.status_code == 400
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
 #####################################
@@ -716,7 +716,7 @@ def test_process_all(session: Session, client: TestClient, monkeypatch: MonkeyPa
 
         # Preprocess
         response = client.post("/v1/episodes/", files=files, data={"title": "Test Episode with WAVs"})
-        assert response.status_code == 201
+        assert response.status_code == status.HTTP_201_CREATED
 
         response_data = client.get("/v1/episodes").json()
         assert len(response_data) == 1
@@ -750,7 +750,7 @@ def test_process_all(session: Session, client: TestClient, monkeypatch: MonkeyPa
 
         # Edit the audio
         response = client.post(f"/v1/episodes/{data['uuid']}/audio-edits")
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
 
         edited_audio_files = list((episode_dir / "edited").glob("*.wav"))
         assert len(edited_audio_files) == (len(wav_files) - 1)
@@ -760,13 +760,13 @@ def test_process_all(session: Session, client: TestClient, monkeypatch: MonkeyPa
         assert edited_combined_file.stat().st_size > 0
 
         response = client.get(f"/v1/episodes/{data['uuid']}/edited-audio")
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         assert response.headers["content-type"] == "audio/wav"
         assert len(response.content) > 0
 
         # Postprocess
         response = client.post(f"/v1/episodes/{data['uuid']}/postprocess")
-        assert response.status_code == 202
+        assert response.status_code == status.HTTP_202_ACCEPTED
 
         postprocessed_audio_files = list((episode_dir / "postprocessed").glob("*.wav"))
         assert len(postprocessed_audio_files) > 0
@@ -776,23 +776,35 @@ def test_process_all(session: Session, client: TestClient, monkeypatch: MonkeyPa
         assert len(postprocessed_srt_files) > 0
 
         response = client.get(f"/v1/episodes/{data['uuid']}/postprocessed-audio")
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         assert response.headers["content-type"] == "audio/wav"
         assert len(response.content) > 0
 
-        # Check transcription management
         response = client.get(f"/v1/episodes/{data['uuid']}/annotated-srt")
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         assert len(response.content) > 0
+
+        annotated_srt_content = (
+            "1\n00:00:00.000 --> 00:00:01.540\nkotaro: なんかジャンプできるようになってる\n\n# Test1\n\n"
+            "2\n00:00:02.250 --> 00:00:03.250\nshun: ありがとうございました\n\n# Test2\n\n- [testurl](https://www.youtube.com/watch?v=1)\n\n"
+            "3\n00:00:03.250 --> 00:00:07.750\nmasa: マークダウンの目次みたいなのが右に出てくるっていうイメージでやってました\n\n"
+        )
+        response = client.put(f"/v1/episodes/{data['uuid']}/annotated-srt", json={"content": annotated_srt_content})
+        assert response.status_code == status.HTTP_200_OK
 
         # Metadata generation
-        response = client.post(f"/v1/episodes/{data['uuid']}/generate-metadata")
-        assert response.status_code == 202
+        response = client.post(f"/v1/episodes/{data['uuid']}/metadata")
+        assert response.status_code == status.HTTP_202_ACCEPTED
 
         response = client.get(f"/v1/episodes/{data['uuid']}/chapters")
-        assert response.status_code == 200
-        assert len(response.content) > 0
+        assert response.status_code == status.HTTP_200_OK
+        content = response.content.decode("utf-8")
+        assert len(content) == 2
+        assert "- (00:02) Test1" in content
+        assert "- (00:03) Test2" in content
 
         response = client.get(f"/v1/episodes/{data['uuid']}/show-notes")
-        assert response.status_code == 200
-        assert len(response.content) > 0
+        assert response.status_code == status.HTTP_200_OK
+        content = response.content.decode("utf-8")
+        print(content)
+        assert "- [testurl](https://www.youtube.com/watch?v=1)" in content
