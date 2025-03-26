@@ -445,12 +445,6 @@ def get_postprocessed_audio(episode_id: str, session: SessionDep) -> FileRespons
     episode = _get_episode_or_404(episode_id, session)
     _check_postprocessed_or_400(episode)
 
-    # Check if post-processing is completed
-    if episode.postprocess_status != JobStatus.completed:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Episode post-processing is not completed. Current status: {episode.postprocess_status}"
-        )
-
     postprocessed_dir = app_dir / "episodes" / episode_id / "postprocessed"
     if not postprocessed_dir.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post-processed directory not found")

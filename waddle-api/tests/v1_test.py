@@ -417,12 +417,9 @@ def test_delete_episode(session: Session, client: TestClient) -> None:
     session.add(episode)
     session.commit()
 
-    # Delete the episode
     response = client.delete(f"/v1/episodes/{episode.uuid}")
-
     assert response.status_code == status.HTTP_204_NO_CONTENT
 
-    # Verify the episode was deleted from the database
     deleted_episode = session.get(Episode, episode.uuid)
     assert deleted_episode is None
 
