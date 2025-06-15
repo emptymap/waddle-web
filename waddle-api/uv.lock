@@ -1164,7 +1164,7 @@ wheels = [
 
 [[package]]
 name = "waddle-ai"
-version = "0.1.2"
+version = "0.1.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "librosa" },
@@ -1175,9 +1175,9 @@ dependencies = [
     { name = "soundfile" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/2d/57/a78862d2bfc354a3b821b09ef423ca4bd1684e0a333739cd980101418c6d/waddle_ai-0.1.2.tar.gz", hash = "sha256:1fb5a96414eccdac9f53dc16b03436d78e472ba84663c8865c281865f676d41f", size = 57358 }
+sdist = { url = "https://files.pythonhosted.org/packages/b9/75/11d457beed4607e455e989cdbc05ca09e0e3e8c63094f8cb93b9989925d7/waddle_ai-0.1.3.tar.gz", hash = "sha256:3f9b57786697ced7e039c7c45db49793f028155862976121e6beb5da1b91635c", size = 57433 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/13/8f/cbfc0c85f63bb67307f7ebc7b1cc4db2bcbf53ba0cc919755b9d5d5e56ea/waddle_ai-0.1.2-py3-none-any.whl", hash = "sha256:cbc524acc9d337129c019a7582942d2c2ad06665cfeeec209dad15d287b9b5eb", size = 40645 },
+    { url = "https://files.pythonhosted.org/packages/a5/7c/c896d923395236a21b1ad7e46112a3ed55154096f5cc2a3e5775c77e8b66/waddle_ai-0.1.3-py3-none-any.whl", hash = "sha256:430dc75fd2159b408133ef4f2663a8c4ba45ea0458746d7b09846205e3a7be5c", size = 40620 },
 ]
 
 [[package]]
@@ -1208,7 +1208,7 @@ requires-dist = [
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115.11" },
     { name = "nanoid", specifier = ">=2.0.0" },
     { name = "sqlmodel", specifier = ">=0.0.16" },
-    { name = "waddle-ai", specifier = ">=0.1.2" },
+    { name = "waddle-ai", specifier = ">=0.1.3" },
 ]
 
 [package.metadata.requires-dev]
