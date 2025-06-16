@@ -15,7 +15,7 @@
 - **Run migrations**: `alembic upgrade head`
 
 ## Code Style Guidelines
-- **Python version**: 3.13+
+- **Python version**: 3.12
 - **Line length**: 79 characters
 - **Quotes**: Double quotes
 - **Indentation**: Spaces (4)

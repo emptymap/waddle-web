@@ -3,7 +3,7 @@ name = "waddle-api"
 version = "0.1.0"
 description = "A short description of the project."
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12,<3.13"
 license = { text = "MIT"}
 authors = [
   {name = "emptymap", email = "youremail@example.aaa"}
@@ -51,7 +51,7 @@ line-ending = "auto"
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
-pythonVersion = "3.13"
+pythonVersion = "3.12"
 typeCheckingMode = "strict"
 reportMissingImports = true
 reportMissingTypeStubs = false

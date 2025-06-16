@@ -18,7 +18,7 @@ tests_dir = Path(__file__).resolve().parent
 
 # https://sqlmodel.tiangolo.com/tutorial/fastapi/tests/#configure-the-in-memory-database
 @pytest.fixture(name="session")
-def session_fixture() -> Generator[Session]:
+def session_fixture() -> Generator[Session, None, None]:
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
@@ -27,7 +27,7 @@ def session_fixture() -> Generator[Session]:
 
 # https://sqlmodel.tiangolo.com/tutorial/fastapi/tests/#client-fixture
 @pytest.fixture(name="client")
-def client_fixture(session: Session) -> Generator[TestClient]:
+def client_fixture(session: Session) -> Generator[TestClient, None, None]:
     """
     Create a test client with an overridden session dependency.
     """
