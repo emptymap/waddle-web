@@ -32,7 +32,7 @@ where = ["app"]
 [tool.ruff]
 line-length = 160
 exclude = [".venv", "venv", "migrations", "__pycache__", "build", "dist"]
-target-version = "py313"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = [
