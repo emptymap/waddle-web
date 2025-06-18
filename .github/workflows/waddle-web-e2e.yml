@@ -67,7 +67,7 @@ jobs:
 
       - name: Upload screenshots
         uses: actions/upload-artifact@v4
-        if: failure()
+        # if: failure()
         with:
           name: cypress-screenshots
           path: waddle-ui/cypress/screenshots
@@ -75,7 +75,7 @@ jobs:
 
       - name: Upload videos
         uses: actions/upload-artifact@v4
-        if: failure()
+        # if: failure()
         with:
           name: cypress-videos
           path: waddle-ui/cypress/videos
