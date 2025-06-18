@@ -50,7 +50,7 @@ jobs:
           version: 10.6.1
 
       - name: Install dependencies
-        run: cd waddle-ui && pnpm install --frozen-lockfile
+        run: cd waddle-ui && pnpm install
 
       - name: Build the app
         run: cd waddle-ui && pnpm build
