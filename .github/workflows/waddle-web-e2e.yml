@@ -36,8 +36,6 @@ jobs:
           uv venv
           uv pip install -e ".[dev]"
           uv run fastapi run --host 0.0.0.0 --port 8000 &
-        env:
-          WHISPER_MODEL_NAME: "tiny"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
