@@ -1,43 +1,60 @@
-describe("Episodes Page", () => {
+describe("Episodes E2E Test", () => {
 	beforeEach(() => {
 		cy.visit("/");
 	});
 
-	it("should display the episodes page with correct title", () => {
-		cy.contains("Episodes").should("be.visible");
-		cy.contains("New Episode").should("be.visible");
-	});
+	it("should create a new episode with audio files and delete it", () => {
+		cy.get("body").should("not.contain", "Failed to fetch");
 
-	it("should navigate to about page", () => {
-		cy.visit("/about");
-		cy.contains('Hello "/about"!').should("be.visible");
-	});
+		// Create a new episode
+		cy.contains("New Episode").click();
 
-	it("should show no episodes message when empty", () => {
-		// Mock empty episodes response
-		cy.intercept("GET", "**/v1/episodes/", {
-			fixture: "empty-episodes.json",
-		}).as("getEpisodes");
-
-		cy.visit("/");
-		cy.wait("@getEpisodes");
-
-		cy.contains("No episodes found. Create your first episode!").should(
-			"be.visible",
-		);
-	});
-
-	it("should display episodes when data is available", () => {
-		// Mock episodes response with sample data
-		cy.intercept("GET", "**/v1/episodes/", { fixture: "episodes.json" }).as(
-			"getEpisodes",
+		cy.get('input[placeholder*="title"], input[name*="title"]').type(
+			"Test Episode E2E",
 		);
 
-		cy.visit("/");
-		cy.wait("@getEpisodes");
+		const path = require("path");
+		const audioFileNames = [
+			"ep12-kotaro.wav",
+			"ep12-masa.wav",
+			"ep12-shun.wav",
+			"GMT20250119-015233_Recording_1280x720.wav",
+		];
+		const audioFiles = audioFileNames.map((fileName) =>
+			path.resolve(
+				Cypress.config("projectRoot"),
+				"..",
+				"waddle-api",
+				"tests",
+				"ep0",
+				fileName,
+			),
+		);
+		cy.get('input[type="file"]').selectFile(audioFiles, { force: true });
 
-		cy.contains("Test Episode 1").should("be.visible");
-		cy.contains("Edit").should("be.visible");
-		cy.contains("Delete").should("be.visible");
+		cy.contains("Create Episode").click();
+
+		cy.contains("Test Episode E2E").should("be.visible");
+		cy.contains("Preprocess", { timeout: 60000 }).should("be.visible");
+		cy.get('[data-testid="preprocess-status"], input[type="checkbox"]').should(
+			"be.checked",
+			{ timeout: 300000 },
+		);
+
+		cy.screenshot("episode-created-with-preprocess-complete");
+
+		cy.contains("Delete").click();
+
+		// Confirm deletion if there's a confirmation dialog
+		cy.get("body").then(($body) => {
+			if (
+				$body.find('[data-testid="confirm-delete"], button:contains("Confirm")')
+					.length > 0
+			) {
+				cy.contains("Confirm").click();
+			}
+		});
+
+		cy.contains("Test Episode E2E").should("not.exist");
 	});
 });
