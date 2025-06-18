@@ -1,21 +1,21 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useForm } from "react-hook-form";
 import {
 	Box,
 	Button,
-	Heading,
-	Input,
-	VStack,
-	Flex,
-	SimpleGrid,
 	Card,
 	Field,
+	Flex,
+	Heading,
+	Input,
+	SimpleGrid,
 	Text,
+	VStack,
 } from "@chakra-ui/react";
-import { toaster } from "../components/ui/toaster";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { ArrowLeft, PlusCircle, Save, Trash2, Upload, X } from "lucide-react";
+import { useId, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
 import { createEpisodeV1EpisodesPost } from "../client";
-import { useState, useRef } from "react";
-import { ArrowLeft, Upload, X, Trash2, Save, PlusCircle } from "lucide-react";
+import { toaster } from "../components/ui/toaster";
 
 export const Route = createFileRoute("/episodes/new")({
 	component: NewEpisode,
@@ -30,6 +30,7 @@ function NewEpisode() {
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const [audioFiles, setAudioFiles] = useState<File[]>([]);
 	const [isUploading, setIsUploading] = useState(false);
+	const titleId = useId();
 
 	const {
 		handleSubmit,
@@ -142,7 +143,7 @@ function NewEpisode() {
 								<Field.RequiredIndicator />
 							</Field.Label>
 							<Input
-								id="title"
+								id={titleId}
 								placeholder="Enter episode title"
 								{...register("title")}
 							/>

@@ -1,0 +1,42 @@
+name: Waddle UI CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "waddle-ui/**"
+      - ".github/workflows/waddle-ui.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "waddle-ui/**"
+      - ".github/workflows/waddle-ui.yml"
+
+jobs:
+  ci-checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./waddle-ui
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Run lint
+        run: pnpm lint
+
+      - name: Run format
+        run: pnpm format
