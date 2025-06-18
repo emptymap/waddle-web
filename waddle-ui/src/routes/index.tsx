@@ -1,38 +1,38 @@
-import { createFileRoute, Link as RouterLink } from "@tanstack/react-router";
-import { useEffect, useState, useCallback, useRef } from "react";
 import {
+	Alert,
 	Box,
+	Button,
+	Card,
+	Dialog,
+	Flex,
 	Heading,
+	ProgressCircle,
+	Spinner,
+	Steps,
 	Text,
 	VStack,
-	Spinner,
-	Card,
-	Flex,
-	Button,
-	Alert,
-	Dialog,
-	Steps,
-	ProgressCircle,
 } from "@chakra-ui/react";
-import { toaster } from "../components/ui/toaster";
+import { createFileRoute, Link as RouterLink } from "@tanstack/react-router";
 import {
-	Check,
+	AlertTriangle,
 	AudioLines,
 	Captions,
+	Check,
+	Clock,
+	Edit,
 	FilePenLine,
 	PlusCircle,
-	Edit,
 	Trash2,
 	X,
-	AlertTriangle,
-	Clock,
 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+	deleteEpisodeV1EpisodesEpisodeIdDelete,
 	type Episode,
 	JobStatus,
 	readEpisodesV1EpisodesGet,
-	deleteEpisodeV1EpisodesEpisodeIdDelete,
 } from "../client";
+import { toaster } from "../components/ui/toaster";
 
 export const Route = createFileRoute("/")({
 	component: Index,
