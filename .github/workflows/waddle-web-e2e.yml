@@ -58,7 +58,8 @@ jobs:
       - name: Cypress run
         uses: cypress-io/github-action@v6
         with:
-          start: cd waddle-ui && pnpm preview
+          working-directory: waddle-ui
+          start: pnpm preview
           wait-on: "http://localhost:4173"
           browser: chrome
-          spec: waddle-ui/cypress/e2e/**/*.cy.ts
+          spec: cypress/e2e/**/*.cy.ts
