@@ -35,7 +35,42 @@ jobs:
           cd waddle-api
           uv venv
           uv pip install -e ".[dev]"
-          uv run fastapi run --host 0.0.0.0 --port 8000 &
+          
+          # Start server with logging
+          echo "Starting API server..."
+          uv run fastapi run --host 0.0.0.0 --port 8000 > ../api_server.log 2>&1 &
+          SERVER_PID=$!
+          echo "API server started with PID: $SERVER_PID"
+          
+          # Wait for server to be ready
+          echo "Waiting for API server to be ready..."
+          for i in {1..30}; do
+            if curl -f http://127.0.0.1:8000/docs > /dev/null 2>&1; then
+              echo "API server is ready!"
+              break
+            fi
+            if ! kill -0 $SERVER_PID 2>/dev/null; then
+              echo "API server process died!"
+              echo "=== API Server Logs ==="
+              cat ../api_server.log
+              exit 1
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 2
+          done
+          
+          # Final check
+          if ! curl -f http://127.0.0.1:8000/docs > /dev/null 2>&1; then
+            echo "API server failed to start properly!"
+            echo "=== API Server Logs ==="
+            cat ../api_server.log
+            exit 1
+          fi
+          
+          echo "=== API Server Status ==="
+          curl -s http://127.0.0.1:8000/docs | head -20 || echo "Failed to get server status"
+        env:
+          WHISPER_MODEL_NAME: "tiny"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -78,3 +113,13 @@ jobs:
           name: cypress-videos
           path: waddle-ui/cypress/videos
           retention-days: 7
+
+      - name: Show API server logs on failure
+        if: failure()
+        run: |
+          echo "=== API Server Logs ==="
+          if [ -f api_server.log ]; then
+            cat api_server.log
+          else
+            echo "API server log file not found"
+          fi
