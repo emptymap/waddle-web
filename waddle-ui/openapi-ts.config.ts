@@ -1,7 +1,7 @@
 import { defaultPlugins } from "@hey-api/openapi-ts";
 
 export default {
-	input: "http://localhost:8000/openapi.json",
+	input: "http://127.0.0.1:8000/openapi.json",
 	output: {
 		format: "biome",
 		lint: "biome",
