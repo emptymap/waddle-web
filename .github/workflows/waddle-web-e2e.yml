@@ -22,6 +22,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - uses: emptymap/setup-ffmpeg@5644f1ea8a58c026223ed8d5147314e7fb7ae3ba
+        id: setup-ffmpeg
+        with:
+          ffmpeg-version: 7.0.2
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -35,13 +40,13 @@ jobs:
           cd waddle-api
           uv venv
           uv pip install -e ".[dev]"
-          
+
           # Start server with logging
           echo "Starting API server..."
           uv run fastapi run --host 0.0.0.0 --port 8000 > ../api_server.log 2>&1 &
           SERVER_PID=$!
           echo "API server started with PID: $SERVER_PID"
-          
+
           # Wait for server to be ready
           echo "Waiting for API server to be ready..."
           for i in {1..30}; do
@@ -58,7 +63,7 @@ jobs:
             echo "Waiting... ($i/30)"
             sleep 2
           done
-          
+
           # Final check
           if ! curl -f http://127.0.0.1:8000/health > /dev/null 2>&1; then
             echo "API server failed to start properly!"
@@ -66,7 +71,7 @@ jobs:
             cat ../api_server.log
             exit 1
           fi
-          
+
           echo "=== API Server Status ==="
           curl -s http://127.0.0.1:8000/health || echo "Failed to get server status"
         env:
