@@ -10,11 +10,11 @@
 // ***********************************************
 
 declare global {
-  namespace Cypress {
-    interface Chainable {
-      // Define custom commands here
-    }
-  }
+	namespace Cypress {
+		interface Chainable {
+			// Define custom commands here
+		}
+	}
 }
 
-export {}
+export {};
