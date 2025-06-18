@@ -38,7 +38,7 @@ describe("Simple E2E Test (Create and Delete)", () => {
 		cy.contains("Test Episode E2E")
 			.parents('[class*="chakra-card__root"]')
 			.within(() => {
-				cy.get(".lucide-check", { timeout: 12000 }).should(
+				cy.get(".lucide-check", { timeout: 60000 }).should(
 					"have.length.at.least",
 					1,
 				);

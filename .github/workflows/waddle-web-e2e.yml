@@ -64,3 +64,19 @@ jobs:
           browser: chrome
           spec: cypress/e2e/**/*.cy.ts
           config: baseUrl=http://localhost:4173
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: cypress-screenshots
+          path: waddle-ui/cypress/screenshots
+          retention-days: 7
+
+      - name: Upload videos
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: cypress-videos
+          path: waddle-ui/cypress/videos
+          retention-days: 7
