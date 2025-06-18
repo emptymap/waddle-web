@@ -1,0 +1,107 @@
+name: Waddle Web E2E Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "waddle-ui/**"
+      - "waddle-api/**"
+      - ".github/workflows/waddle-web-e2e.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "waddle-ui/**"
+      - "waddle-api/**"
+      - ".github/workflows/waddle-web-e2e.yml"
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: emptymap/setup-ffmpeg@5644f1ea8a58c026223ed8d5147314e7fb7ae3ba
+        id: setup-ffmpeg
+        with:
+          ffmpeg-version: 7.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Start API server
+        run: |
+          cd waddle-api
+          uv venv
+          uv pip install -e ".[dev]"
+
+          # Start server with logging
+          echo "Starting API server..."
+          uv run fastapi run --host 0.0.0.0 --port 8000 > ../api_server.log 2>&1 &
+          SERVER_PID=$!
+          echo "API server started with PID: $SERVER_PID"
+        env:
+          WHISPER_MODEL_NAME: "tiny"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10.6.1
+
+      - name: Install dependencies
+        run: cd waddle-ui && pnpm install
+
+      - name: Build the app
+        run: cd waddle-ui && pnpm build
+
+      - name: Verify API connectivity
+        run: |
+          echo "Testing API connectivity..."
+          curl -v http://127.0.0.1:8000/health
+
+      - name: Cypress run
+        uses: cypress-io/github-action@v6
+        with:
+          working-directory: waddle-ui
+          start: pnpm preview
+          wait-on: "http://localhost:4173"
+          browser: chrome
+          spec: cypress/e2e/**/*.cy.ts
+          config: baseUrl=http://localhost:4173
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: cypress-screenshots
+          path: waddle-ui/cypress/screenshots
+          retention-days: 7
+
+      - name: Upload videos
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: cypress-videos
+          path: waddle-ui/cypress/videos
+          retention-days: 7
+
+      - name: Show API server logs on failure
+        if: failure()
+        run: |
+          echo "=== API Server Logs ==="
+          if [ -f api_server.log ]; then
+            cat api_server.log
+          else
+            echo "API server log file not found"
+          fi

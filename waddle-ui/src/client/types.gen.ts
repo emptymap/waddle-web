@@ -189,5 +189,5 @@ export type UpdateEpisodeV1EpisodesEpisodeIdPatchResponse =
 	UpdateEpisodeV1EpisodesEpisodeIdPatchResponses[keyof UpdateEpisodeV1EpisodesEpisodeIdPatchResponses];
 
 export type ClientOptions = {
-	baseUrl: "http://localhost:8000" | (string & {});
+	baseUrl: "http://127.0.0.1:8000" | (string & {});
 };
