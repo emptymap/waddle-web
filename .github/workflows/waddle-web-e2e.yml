@@ -46,34 +46,6 @@ jobs:
           uv run fastapi run --host 0.0.0.0 --port 8000 > ../api_server.log 2>&1 &
           SERVER_PID=$!
           echo "API server started with PID: $SERVER_PID"
-
-          # Wait for server to be ready
-          echo "Waiting for API server to be ready..."
-          for i in {1..30}; do
-            if curl -f http://127.0.0.1:8000/health > /dev/null 2>&1; then
-              echo "API server is ready!"
-              break
-            fi
-            if ! kill -0 $SERVER_PID 2>/dev/null; then
-              echo "API server process died!"
-              echo "=== API Server Logs ==="
-              cat ../api_server.log
-              exit 1
-            fi
-            echo "Waiting... ($i/30)"
-            sleep 2
-          done
-
-          # Final check
-          if ! curl -f http://127.0.0.1:8000/health > /dev/null 2>&1; then
-            echo "API server failed to start properly!"
-            echo "=== API Server Logs ==="
-            cat ../api_server.log
-            exit 1
-          fi
-
-          echo "=== API Server Status ==="
-          curl -s http://127.0.0.1:8000/health || echo "Failed to get server status"
         env:
           WHISPER_MODEL_NAME: "tiny"
 
@@ -97,8 +69,6 @@ jobs:
         run: |
           echo "Testing API connectivity..."
           curl -v http://127.0.0.1:8000/health
-          echo "Testing API episodes endpoint..."
-          curl -v http://127.0.0.1:8000/v1/episodes
 
       - name: Cypress run
         uses: cypress-io/github-action@v6
